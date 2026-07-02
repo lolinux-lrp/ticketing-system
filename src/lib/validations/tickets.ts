@@ -1,0 +1,39 @@
+import { z } from "zod";
+import { Priority,Status } from "@prisma/client";
+
+export const createTicketSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(2, "Title should be atleat 2 characters")
+    .max(200, "Title too long"),
+  description: z
+    .string()
+    .trim()
+    .min(10, "Description should be atleat 10 characters"),
+  priority: z.enum(Priority)
+    .optional(),
+  createdById: z.string().uuid("Invalid User ID")
+});
+
+export type createTicketInput = z.infer<typeof createTicketSchema>;
+
+export const getTicketSchema = z.object({
+  search: z.string().optional(),
+  status: z.enum(Status).optional(),
+  priority: z.enum(Priority).optional(),
+  sortBy: z.string().default("createdAt"),
+  order: z.enum(["asc", "desc"]).default("desc"),
+})
+
+export type getTicketInput = z.infer<typeof getTicketSchema>;
+
+export const updateTicketSchema = z.object({
+  title: z.string().trim().min(2).max(200).optional(),
+  description: z.string().trim().min(10).optional(),
+  status: z.enum(Status).optional(),
+  priority: z.enum(Priority).optional(),
+  assignedToId: z.string().uuid("Invalid Agent ID").optional().nullable()
+})
+
+export type updateTicketInput = z.infer<typeof updateTicketSchema>;
