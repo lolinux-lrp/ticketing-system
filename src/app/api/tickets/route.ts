@@ -41,43 +41,48 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-    try {
-        const urlParams = Object.fromEntries(req.nextUrl.searchParams);
-        const validation = getTicketSchema.safeParse(urlParams);
+  try {
+    const urlParams = Object.fromEntries(req.nextUrl.searchParams);
+    const validation = getTicketSchema.safeParse(urlParams);
 
-        if (!validation.success) {
-            return NextResponse.json(
-                { error: "Invalid query parameters" }, 
-                { status: 400 }
-            );
-        }
-
-        const { search, status, priority, sortBy, order } = validation.data;
-
-        const where: Prisma.TicketWhereInput = {
-            status,
-            priority,
-        };
-
-        if (search) {
-            where.OR = [
-                { title: { contains: search, mode: "insensitive" } },
-                { description: { contains: search, mode: "insensitive" } }
-            ];
-        }
-
-        const tickets = await prisma.ticket.findMany({
-            where,
-            orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
-            include: {
-                assignedTo: { select: { id: true, name: true, role: true } },
-                createdBy: { select: { id: true, name: true, role: true } }
-            }
-        });
-
-        return NextResponse.json({ data: tickets });
-    } catch (error) {
-        console.log("Error fetching tickets: ", error);
-        return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Invalid query parameters" },
+        { status: 400 },
+      );
     }
+
+    const { search, status, priority, createdById, sortBy, order } =
+      validation.data;
+
+    const where: Prisma.TicketWhereInput = {
+      status,
+      priority,
+      createdById,
+    };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const tickets = await prisma.ticket.findMany({
+      where,
+      orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
+      include: {
+        assignedTo: { select: { id: true, name: true, role: true } },
+        createdBy: { select: { id: true, name: true, role: true } },
+      },
+    });
+
+    return NextResponse.json({ data: tickets });
+  } catch (error) {
+    console.log("Error fetching tickets: ", error);
+    return NextResponse.json(
+      { error: "Failed to fetch tickets" },
+      { status: 500 },
+    );
+  }
 }

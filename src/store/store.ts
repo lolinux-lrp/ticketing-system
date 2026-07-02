@@ -1,7 +1,12 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { ticketsApi } from "./ticketsApi";
 
 export const store = configureStore({
-    reducer: {},
+  reducer: {
+    [ticketsApi.reducerPath]: ticketsApi.reducer,
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(ticketsApi.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
