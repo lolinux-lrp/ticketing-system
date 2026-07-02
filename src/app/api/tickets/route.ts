@@ -1,41 +1,83 @@
-import { NextResponse } from "next/server"
-import {prisma} from "@/lib/prisma"
+import { NextResponse, NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { createTicketSchema, getTicketSchema } from "@/lib/validations/tickets";
 
-export async function POST(req: Request){
-    try{
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
 
-        const body = await req.json();
-        const {createdById,description,title} = body;
-
-        if(!createdById || !description || !title){
-            return NextResponse.json({error: "All fields necessary for making a ticket"},{status: 400});
-        }
-        
-        const newTicket = await prisma.ticket.create({
-            data:{
-                createdById,
-                description,
-                title
-            }
-        });
-
-        return NextResponse.json(newTicket,{status: 201});
-    }catch{
-        return NextResponse.json({error: "Failed to create ticket"}, {status: 500})
+    const validation = createTicketSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error.issues[0].message },
+        { status: 400 },
+      );
     }
+    const { createdById, description, title } = validation.data;
+
+    if (!createdById || !description || !title) {
+      return NextResponse.json(
+        { error: "All fields necessary for making a ticket" },
+        { status: 400 },
+      );
+    }
+
+    const newTicket = await prisma.ticket.create({
+      data: {
+        createdById,
+        description,
+        title,
+      },
+    });
+
+    return NextResponse.json(newTicket, { status: 201 });
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to create ticket" },
+      { status: 500 },
+    );
+  }
 }
 
-export async function GET(){
-    try{
+export async function GET(req: NextRequest) {
+    try {
+        const urlParams = Object.fromEntries(req.nextUrl.searchParams);
+        const validation = getTicketSchema.safeParse(urlParams);
+
+        if (!validation.success) {
+            return NextResponse.json(
+                { error: "Invalid query parameters" }, 
+                { status: 400 }
+            );
+        }
+
+        const { search, status, priority, sortBy, order } = validation.data;
+
+        const where: Prisma.TicketWhereInput = {
+            status,
+            priority,
+        };
+
+        if (search) {
+            where.OR = [
+                { title: { contains: search, mode: "insensitive" } },
+                { description: { contains: search, mode: "insensitive" } }
+            ];
+        }
+
         const tickets = await prisma.ticket.findMany({
-            orderBy: {
-                createdAt: 'desc'
+            where,
+            orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
+            include: {
+                assignedTo: { select: { id: true, name: true, role: true } },
+                createdBy: { select: { id: true, name: true, role: true } }
             }
         });
 
-        return NextResponse.json(tickets,{status: 200});
-    }catch(error){
-        console.log("Error fetching tickets:", error)
-        return NextResponse.json({error: "Failed to fetch tickets"}, {status: 500})
+        return NextResponse.json({ data: tickets });
+    } catch (error) {
+        console.log("Error fetching tickets: ", error);
+        return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
     }
 }
