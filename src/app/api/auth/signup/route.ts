@@ -1,24 +1,23 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
+import { signupSchema } from "@/lib/validations/auth";
 
 export async function POST(req: Request) {
     try {
-        const { name, email, password } = await req.json();
+        const body = await req.json();
 
-        if (!name || !email || !password) {
+        const result = signupSchema.safeParse(body);
+
+        if (!result.success) {
+            const firstError = result.error.issues[0];
             return NextResponse.json(
-                { error: "Name, email, and password are required." },
+                { error: firstError.message },
                 { status: 400 }
             );
         }
 
-        if (password.length < 6) {
-            return NextResponse.json(
-                { error: "Password must be at least 6 characters." },
-                { status: 400 }
-            );
-        }
+        const { name, email, password } = result.data;
 
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
@@ -35,11 +34,9 @@ export async function POST(req: Request) {
                 name,
                 email,
                 password: hashedPassword,
-                // role defaults to CUSTOMER automatically, per the schema
             },
         });
 
-        // never send the password hash back to the client
         const { password: _, ...userWithoutPassword } = user;
 
         return NextResponse.json({ user: userWithoutPassword }, { status: 201 });
