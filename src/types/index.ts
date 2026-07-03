@@ -37,3 +37,16 @@ export interface CreateTicketPayload {
   priority?: Priority;
   createdById: string;
 }
+
+export interface UpdateTicketPayload {
+  title?: string;
+  description?: string;
+  status?: Status;
+  priority?: Priority;
+  assignedToId?: string | null;
+}
+
+export interface DeleteTicketResponse {
+  message: string;
+  data: Ticket;
+}

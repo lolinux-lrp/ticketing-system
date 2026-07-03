@@ -1,7 +1,12 @@
 export { TicketsDashboard } from "./TicketsDashboard";
 export { CreateTicketForm } from "./CreateTicketForm";
 export { TicketFilters } from "./TicketFilters";
+export { TicketRow } from "./TicketRow";
 export { StatusBadge } from "./StatusBadge";
 export { PriorityBadge } from "./PriorityBadge";
+export { StatusSelect } from "./StatusSelect";
+export { PrioritySelect } from "./PrioritySelect";
+export { EditTicketModal } from "./EditTicketModal";
+export { extractErrorMessage } from "./extractErrorMessage";
 export { useTicketFilters } from "./useTicketFilters";
 export type { TicketFiltersState } from "./useTicketFilters";

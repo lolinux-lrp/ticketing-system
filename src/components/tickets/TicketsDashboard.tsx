@@ -3,9 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useGetTicketsQuery } from "@/store/ticketsApi";
 import type { GetTicketsParams } from "@/types";
-import { StatusBadge } from "./StatusBadge";
-import { PriorityBadge } from "./PriorityBadge";
 import { TicketFilters } from "./TicketFilters";
+import { TicketRow } from "./TicketRow";
 import { useTicketFilters } from "./useTicketFilters";
 
 export function TicketsDashboard() {
@@ -84,35 +83,12 @@ export function TicketsDashboard() {
                 <th className="px-4 py-3 font-medium">Priority</th>
                 <th className="px-4 py-3 font-medium">Created By</th>
                 <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {tickets.map((ticket) => (
-                <tr
-                  key={ticket.id}
-                  className="bg-slate-950 hover:bg-slate-900/60"
-                >
-                  <td className="max-w-xs px-4 py-3">
-                    <div className="font-medium text-slate-100">
-                      {ticket.title}
-                    </div>
-                    <div className="truncate text-xs text-slate-500">
-                      {ticket.description}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <PriorityBadge priority={ticket.priority} />
-                  </td>
-                  <td className="px-4 py-3 text-slate-300">
-                    {ticket.createdBy.name}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">
-                    {new Date(ticket.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
+                <TicketRow key={ticket.id} ticket={ticket} />
               ))}
             </tbody>
           </table>

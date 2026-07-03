@@ -1,5 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { CreateTicketPayload, GetTicketsParams, Ticket } from "@/types";
+import type {
+  CreateTicketPayload,
+  DeleteTicketResponse,
+  GetTicketsParams,
+  Ticket,
+  UpdateTicketPayload,
+} from "@/types";
 
 interface GetTicketsResponse {
   data: Ticket[];
@@ -32,7 +38,36 @@ export const ticketsApi = createApi({
       }),
       invalidatesTags: [{ type: "Ticket", id: "LIST" }],
     }),
+    updateTicket: builder.mutation<
+      Ticket,
+      { id: string; body: UpdateTicketPayload }
+    >({
+      query: ({ id, body }) => ({
+        url: `tickets/${id}`,
+        method: "PATCH",
+        body,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Ticket", id },
+        { type: "Ticket", id: "LIST" },
+      ],
+    }),
+    deleteTicket: builder.mutation<DeleteTicketResponse, string>({
+      query: (id) => ({
+        url: `tickets/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Ticket", id },
+        { type: "Ticket", id: "LIST" },
+      ],
+    }),
   }),
 });
 
-export const { useGetTicketsQuery, useCreateTicketMutation } = ticketsApi;
+export const {
+  useGetTicketsQuery,
+  useCreateTicketMutation,
+  useUpdateTicketMutation,
+  useDeleteTicketMutation,
+} = ticketsApi;

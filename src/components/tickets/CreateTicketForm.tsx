@@ -4,22 +4,9 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useCreateTicketMutation } from "@/store/ticketsApi";
 import type { Priority } from "@/types";
+import { extractErrorMessage } from "./extractErrorMessage";
 
 const PRIORITY_OPTIONS: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-
-function extractErrorMessage(err: unknown): string {
-  if (
-    err &&
-    typeof err === "object" &&
-    "data" in err &&
-    err.data &&
-    typeof err.data === "object" &&
-    "error" in err.data
-  ) {
-    return String((err.data as { error: unknown }).error);
-  }
-  return "Failed to create ticket. Please try again.";
-}
 
 export function CreateTicketForm() {
   const { data: session, status } = useSession();
@@ -54,14 +41,14 @@ export function CreateTicketForm() {
       setPriority("MEDIUM");
       setSuccessMessage(true);
     } catch (err) {
-      setFormError(extractErrorMessage(err));
+      setFormError(
+        extractErrorMessage(err, "Failed to create ticket. Please try again."),
+      );
     }
   }
 
   if (status === "loading") {
-    return (
-      <p className="text-sm text-slate-400">Loading session...</p>
-    );
+    return <p className="text-sm text-slate-400">Loading session...</p>;
   }
 
   if (!session) {

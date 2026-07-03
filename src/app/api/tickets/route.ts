@@ -16,13 +16,6 @@ export async function POST(req: NextRequest) {
     }
     const { createdById, description, title } = validation.data;
 
-    if (!createdById || !description || !title) {
-      return NextResponse.json(
-        { error: "All fields necessary for making a ticket" },
-        { status: 400 },
-      );
-    }
-
     const newTicket = await prisma.ticket.create({
       data: {
         createdById,
@@ -86,3 +79,5 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+
