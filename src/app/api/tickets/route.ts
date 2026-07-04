@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(newTicket, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.log("Error creating Ticket:", error);
     return NextResponse.json(
       { error: "Failed to create ticket" },
       { status: 500 },
