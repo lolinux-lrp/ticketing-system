@@ -50,11 +50,11 @@ export async function POST(req: NextRequest) {
 
     // Send Invite Email via Ethereal (Development)
     const transport = nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
       auth: {
-        user: "ynwdhd73522u3jon@ethereal.email",
-        pass: "PYJWCzzgj4S9wkM13D",
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
       },
     });
 
