@@ -1,14 +1,49 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import EmailProvider from "next-auth/providers/email";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
+import nodemailer from "nodemailer";
+import type { Adapter } from "next-auth/adapters";
 
 export const authOptions: NextAuthOptions = {
+    adapter: PrismaAdapter(prisma) as Adapter,
     session: {
         strategy: "jwt",
     },
     providers: [
+        EmailProvider({
+            server: {
+                host: process.env.SMTP_HOST,
+                port: Number(process.env.SMTP_PORT),
+                auth: {
+                    user: process.env.SMTP_USER,
+                    pass: process.env.SMTP_PASSWORD,
+                },
+            },
+            from: "noreply@ticketing-system.local",
+            sendVerificationRequest: async ({ identifier, url, provider }) => {
+                const { host } = new URL(url);
+                const transport = nodemailer.createTransport(provider.server);
+                const result = await transport.sendMail({
+                    to: identifier,
+                    from: provider.from,
+                    subject: `Sign in to ${host}`,
+                    text: `Sign in to ${host}\n${url}\n\n`,
+                    html: `<p>Sign in to <strong>${host}</strong></p><p><a href="${url}">Click here to sign in</a></p>`,
+                });
+                
+                // For development, we print the Ethereal link directly to the console
+                // so the user doesn't have to log into Ethereal to click the link!
+                console.log("=========================================");
+                console.log("📬 MAGIC LINK GENERATED! ");
+                console.log("Direct Link (Click to login): %s", url);
+                console.log("Ethereal Preview URL: %s", nodemailer.getTestMessageUrl(result));
+                console.log("=========================================");
+            }
+        }),
         CredentialsProvider({
             name: "Credentials",
             credentials: {
@@ -28,7 +63,7 @@ export const authOptions: NextAuthOptions = {
                     where: { email },
                 });
 
-                if (!user) {
+                if (!user || !user.password) {
                     return null;
                 }
 
@@ -51,14 +86,14 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id;
-                token.role = (user ).role;
+                token.role = (user as any).role || "CUSTOMER"; // Default to customer if not set
             }
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user ).id = token.id;
-                (session.user ).role = token.role;
+                (session.user as any).id = token.id;
+                (session.user as any).role = token.role;
             }
             return session;
         },

@@ -20,6 +20,7 @@ export interface Ticket {
   updatedAt: string;
   createdBy: TicketUser;
   assignedTo: TicketUser | null;
+  workDone: string | null;
 }
 
 export interface GetTicketsParams {
@@ -44,9 +45,33 @@ export interface UpdateTicketPayload {
   status?: Status;
   priority?: Priority;
   assignedToId?: string | null;
+  workDone?: string;
 }
 
 export interface DeleteTicketResponse {
   message: string;
   data: Ticket;
+}
+
+export interface Comment {
+  id: string;
+  content: string;
+  ticketId: string;
+  authorId: string;
+  createdAt: string;
+  author: {
+    id: string;
+    name: string;
+    role: string;
+  }
+}
+
+export interface CreateCommentPayload {
+  ticketId: string;
+  authorId: string;
+  content: string;
+}
+
+export interface GetCommentsParams {
+  ticketId: string;
 }

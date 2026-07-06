@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
+  TicketUser,
   CreateTicketPayload,
   DeleteTicketResponse,
   GetTicketsParams,
@@ -62,12 +63,33 @@ export const ticketsApi = createApi({
         { type: "Ticket", id: "LIST" },
       ],
     }),
+    getTicket: builder.query<{ ticket: Ticket & { comments: any[] } }, string>({
+      query: (id) => `tickets/${id}`,
+      providesTags: (result, error, id) => [{ type: "Ticket", id }],
+    }),
+    addComment: builder.mutation<any, { ticketId: string; content: string }>({
+      query: ({ ticketId, content }) => ({
+        url: `tickets/${ticketId}/comments`,
+        method: "POST",
+        body: { content },
+      }),
+      invalidatesTags: (result, error, { ticketId }) => [
+        { type: "Ticket", id: ticketId },
+      ],
+    }),
+    getAgents: builder.query<TicketUser[], void>({
+      query: () => "users/agents",
+      transformResponse: (response: { data: TicketUser[] }) => response.data,
+    }),
   }),
 });
 
 export const {
   useGetTicketsQuery,
+  useGetTicketQuery,
   useCreateTicketMutation,
   useUpdateTicketMutation,
   useDeleteTicketMutation,
+  useAddCommentMutation,
+  useGetAgentsQuery,
 } = ticketsApi;
