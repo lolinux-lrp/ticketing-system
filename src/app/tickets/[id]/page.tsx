@@ -10,6 +10,7 @@ import {
     useGetAgentsQuery,
 } from "@/store/ticketsApi";
 import { TicketCommentsSection } from "@/components/comments/TicketCommentsSection";
+import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
 
 const statusOptions = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const priorityOptions = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -109,16 +110,11 @@ export default function TicketDetailPage() {
                         {isAdmin && (
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Assignee</label>
-                                <select
-                                    value={ticket.assignedToId || ""}
-                                    onChange={(e) => updateTicket({ id: ticketId, body: { assignedToId: e.target.value || null } })}
-                                    className="border rounded px-2 py-1 text-sm"
-                                >
-                                    <option value="">Unassigned</option>
-                                    {agents?.map((a) => (
-                                        <option key={a.id} value={a.id}>{a.name}</option>
-                                    ))}
-                                </select>
+                                <AssigneeSearch
+                                    agents={agents}
+                                    assignedToId={ticket.assignedToId}
+                                    onChange={(newId) => updateTicket({ id: ticketId, body: { assignedToId: newId } })}
+                                />
                             </div>
                         )}
                         {isAgent && ticket.assignedToId !== session?.user?.id && (
