@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
 import type { Priority, Status, Ticket } from "@/types";
 import {
   useDeleteTicketMutation,
@@ -19,6 +21,10 @@ export function TicketRow({ ticket }: TicketRowProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isCustomer = session?.user?.role === "CUSTOMER";
 
   const [deleteTicket, { isLoading: isDeleting }] = useDeleteTicketMutation();
   const [updateTicket, { isLoading: isUpdating }] = useUpdateTicketMutation();
@@ -56,7 +62,9 @@ export function TicketRow({ ticket }: TicketRowProps) {
   return (
     <tr className="bg-slate-950 hover:bg-slate-900/60">
       <td className="max-w-xs px-4 py-3">
-        <div className="font-medium text-slate-100">{ticket.title}</div>
+        <Link href={`/tickets/${ticket.id}`} className="font-medium text-blue-400 hover:underline">
+          {ticket.title}
+        </Link>
         <div className="truncate text-xs text-slate-500">
           {ticket.description}
         </div>
@@ -68,14 +76,14 @@ export function TicketRow({ ticket }: TicketRowProps) {
         <StatusSelect
           status={ticket.status}
           onChange={handleStatusChange}
-          disabled={isUpdating}
+          disabled={isUpdating || isCustomer}
         />
       </td>
       <td className="px-4 py-3">
         <PrioritySelect
           priority={ticket.priority}
           onChange={handlePriorityChange}
-          disabled={isUpdating}
+          disabled={isUpdating || isCustomer}
         />
       </td>
       <td className="px-4 py-3 text-slate-300">{ticket.createdBy.name}</td>
@@ -112,13 +120,15 @@ export function TicketRow({ ticket }: TicketRowProps) {
             >
               Edit
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="rounded-md border border-slate-800 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10"
-            >
-              Delete
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="rounded-md border border-slate-800 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10"
+              >
+                Delete
+              </button>
+            )}
           </div>
         )}
         {deleteError && (

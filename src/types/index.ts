@@ -20,6 +20,7 @@ export interface Ticket {
   updatedAt: string;
   createdBy: TicketUser;
   assignedTo: TicketUser | null;
+  workDone: string | null;
 }
 
 export interface GetTicketsParams {
@@ -44,6 +45,7 @@ export interface UpdateTicketPayload {
   status?: Status;
   priority?: Priority;
   assignedToId?: string | null;
+  workDone?: string;
 }
 
 export interface DeleteTicketResponse {

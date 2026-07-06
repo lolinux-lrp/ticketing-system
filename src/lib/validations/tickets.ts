@@ -34,6 +34,7 @@ export const updateTicketSchema = z.object({
   status: z.enum(Status).optional(),
   priority: z.enum(Priority).optional(),
   assignedToId: z.string().uuid("Invalid Agent ID").optional().nullable(),
+  workDone: z.string().optional(),
 });
 
 export type updateTicketInput = z.infer<typeof updateTicketSchema>;
