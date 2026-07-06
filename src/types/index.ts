@@ -59,7 +59,8 @@ export interface Comment {
   ticketId: string;
   authorId: string;
   createdAt: string;
-  author?: {
+  author: {
+    id: string;
     name: string;
     role: string;
   }
