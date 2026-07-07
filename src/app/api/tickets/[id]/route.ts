@@ -23,12 +23,6 @@ export async function GET(req: NextRequest, { params }: udParams) {
       include: {
         assignedTo: { select: { id: true, name: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },
-        comments: {
-          include: {
-            author: { select: { id: true, name: true, role: true } }
-          },
-          orderBy: { createdAt: 'asc' }
-        }
       },
     });
 

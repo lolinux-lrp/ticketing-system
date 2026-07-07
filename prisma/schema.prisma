@@ -91,6 +91,11 @@ model Ticket {
   workDone     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  searchVector Unsupported("tsvector")?
+
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([status, priority])
 }
 
 model Comment {
@@ -101,4 +106,7 @@ model Comment {
   author    User     @relation(fields: [authorId], references: [id])
   authorId  String
   createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([authorId])
 }
