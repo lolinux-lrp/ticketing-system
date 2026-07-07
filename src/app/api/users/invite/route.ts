@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
         name,
         email,
         role,
+        password: null, // Invited users authenticate via magic link — no password set
       },
     });
 

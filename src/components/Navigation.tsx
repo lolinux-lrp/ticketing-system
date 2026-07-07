@@ -1,41 +1,208 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 
-export function Navigation() {
-  const { data: session } = useSession();
+// ─── Icons ────────────────────────────────────────────────────────
+function IconDashboard() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
+    </svg>
+  );
+}
+function IconTickets() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect width="6" height="4" x="9" y="3" rx="1"/><path d="M9 12h6"/><path d="M9 16h6"/>
+    </svg>
+  );
+}
+function IconAdmin() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  );
+}
+function IconSignOut() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+  );
+}
 
-  if (!session?.user) {
-    return null;
-  }
+// ─── Avatar initials helper ────────────────────────────────────────
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+const AVATAR_COLORS: Record<string, string> = {
+  ADMIN: "#6366f1",
+  AGENT: "#0ea5e9",
+  CUSTOMER: "#10b981",
+};
+
+// ─── NavItem ──────────────────────────────────────────────────────
+interface NavItemProps {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+}
+function NavItem({ href, label, icon, isActive }: NavItemProps) {
+  return (
+    <Link href={href} className={`nav-item ${isActive ? "active" : ""}`}>
+      <span className="shrink-0">{icon}</span>
+      {label}
+    </Link>
+  );
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────
+export function Sidebar() {
+  const { data: session } = useSession();
+  const pathname = usePathname();
+
+  if (!session?.user) return null;
+
+  const { name = "", email = "", role = "" } = session.user as {
+    name?: string;
+    email?: string;
+    role?: string;
+  };
+  const initials = getInitials(name || email || "U");
+  const avatarBg = AVATAR_COLORS[role] ?? "#6366f1";
 
   return (
-    <nav className="border-b border-slate-800 bg-slate-950 px-8 py-4">
-      <div className="mx-auto flex max-w-5xl items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="text-lg font-semibold text-slate-50">
-            Ticketing System
-          </Link>
-          {session.user.role === "ADMIN" && (
-            <Link href="/admin" className="text-sm font-medium text-slate-300 hover:text-white">
-              Admin
-            </Link>
-          )}
+    <nav className="flex flex-col h-full" style={{ userSelect: "none" }}>
+      {/* Brand */}
+      <div
+        className="flex items-center gap-2.5 px-4 py-3 shrink-0"
+        style={{ height: "var(--topbar-height)", borderBottom: "1px solid var(--sidebar-border)" }}
+      >
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: "var(--brand)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+            <rect width="6" height="4" x="9" y="3" rx="1"/>
+            <path d="M9 12h6"/><path d="M9 16h4"/>
+          </svg>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <Link href="/account" className="text-sm font-medium text-slate-300 hover:text-white">
-            {session.user.email} <span className="ml-1 rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{session.user.role}</span>
-          </Link>
+        <span
+          className="text-sm font-bold tracking-tight"
+          style={{ color: "var(--text-primary)" }}
+        >
+          TicketFlow
+        </span>
+      </div>
+
+      {/* Navigation items */}
+      <div className="flex flex-col gap-0.5 p-2 flex-1">
+        <p
+          className="px-2 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Workspace
+        </p>
+
+        <NavItem
+          href="/dashboard"
+          label="Dashboard"
+          icon={<IconDashboard />}
+          isActive={pathname === "/dashboard"}
+        />
+        <NavItem
+          href="/dashboard"
+          label="All Tickets"
+          icon={<IconTickets />}
+          isActive={false}
+        />
+
+        {role === "ADMIN" && (
+          <>
+            <p
+              className="px-2 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Admin
+            </p>
+            <NavItem
+              href="/admin"
+              label="User Management"
+              icon={<IconAdmin />}
+              isActive={pathname === "/admin"}
+            />
+          </>
+        )}
+      </div>
+
+      {/* User footer */}
+      <div
+        className="p-3 shrink-0"
+        style={{ borderTop: "1px solid var(--sidebar-border)" }}
+      >
+        <div className="flex items-center gap-2.5 p-2 rounded-lg" style={{ background: "var(--surface-2)" }}>
+          {/* Avatar */}
+          <div
+            className="avatar w-7 h-7 text-white shrink-0"
+            style={{ background: avatarBg, fontSize: "10px" }}
+          >
+            {initials}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-xs font-semibold truncate leading-tight"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {name || "User"}
+            </p>
+            <p
+              className="text-[10px] truncate leading-tight mt-0.5"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {email}
+            </p>
+          </div>
+
+          {/* Sign out */}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-slate-700"
+            title="Sign out"
+            className="shrink-0 p-1 rounded-md transition-colors"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
+              (e.currentTarget as HTMLElement).style.background = "var(--surface-0)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
           >
-            Log out
+            <IconSignOut />
           </button>
         </div>
+
+        {/* Role badge */}
+        <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          {role}
+        </p>
       </div>
     </nav>
   );
 }
+
+// Keep backward-compat export for any lingering imports
+export { Sidebar as Navigation };
