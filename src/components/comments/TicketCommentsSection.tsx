@@ -13,7 +13,10 @@ export const TicketCommentsSection: React.FC<TicketCommentsSectionProps> = ({ ti
   const { data: session } = useSession();
   const currentUserId = session?.user?.id || "";
 
-  const { data: comments = [], isLoading } = useGetCommentsQuery(ticketId);
+  const { data: comments = [], isLoading } = useGetCommentsQuery(ticketId, {
+    pollingInterval: 10000,        // re-fetch every 10 seconds
+    skipPollingIfUnfocused: true,  // pause polling when tab is in the background
+  });
 
   const [createComment, { isLoading: isSubmitting }] = useCreateCommentMutation();
   const [deleteComment] = useDeleteCommentMutation();
