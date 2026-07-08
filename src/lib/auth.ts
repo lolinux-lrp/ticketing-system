@@ -8,6 +8,25 @@ import { loginSchema } from "@/lib/validations/auth";
 import nodemailer from "nodemailer";
 import type { Adapter } from "next-auth/adapters";
 
+declare module "next-auth" {
+    interface Session {
+        user: {
+            id: string;
+            name?: string | null;
+            email?: string | null;
+            image?: string | null;
+            role: string;
+        };
+    }
+}
+
+declare module "next-auth/jwt" {
+    interface JWT {
+        id: string;
+        role: string;
+    }
+}
+
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma) as Adapter,
     session: {
@@ -86,14 +105,14 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id;
-                token.role = (user as any).role || "CUSTOMER"; // Default to customer if not set
+                token.role = (user as { id: string; role?: string }).role ?? "CUSTOMER";
             }
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).id = token.id;
-                (session.user as any).role = token.role;
+                session.user.id = token.id;
+                session.user.role = token.role;
             }
             return session;
         },
