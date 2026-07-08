@@ -53,8 +53,8 @@ export async function sendInviteEmail({ name, email, role, hostUrl, isUpgrade }:
     html: htmlBody,
   });
 
-  console.log("=========================================");
-  console.log(`📬 INVITE EMAIL SENT to ${email}`);
-  console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info as any));
-  console.log("=========================================");
+  const previewUrl = nodemailer.getTestMessageUrl(info);
+  if (previewUrl) {
+    console.log("Invite email preview URL: %s", previewUrl);
+  }
 }
