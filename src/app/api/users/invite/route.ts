@@ -63,7 +63,16 @@ export async function POST(req: NextRequest) {
         data: { role },
       });
 
-      await sendInviteEmail({ name: updated.name ?? name, email, role, hostUrl, isUpgrade: true });
+      try {
+        await sendInviteEmail({ name: updated.name ?? name, email, role, hostUrl, isUpgrade: true });
+      } catch (emailError) {
+        // Rollback role upgrade if email fails to send
+        await prisma.user.update({
+          where: { email },
+          data: { role: existingUser.role },
+        });
+        throw emailError;
+      }
 
       return NextResponse.json({
         message: `${updated.name ?? email}'s role has been upgraded to ${role}. They have been notified.`,
@@ -85,7 +94,19 @@ export async function POST(req: NextRequest) {
 
     // Signup URL embeds token so only the recipient can claim the account
     const signupUrl = `${hostUrl}/signup?token=${token}&email=${encodeURIComponent(email)}`;
-    await sendInviteEmail({ name, email, role, signupUrl, isUpgrade: false });
+    
+    try {
+      await sendInviteEmail({ name, email, role, signupUrl, isUpgrade: false });
+    } catch (emailError) {
+      // Rollback: delete the token and user if email fails to send
+      await prisma.verificationToken.delete({ 
+        where: { 
+          identifier_token: { identifier: email, token } 
+        } 
+      });
+      await prisma.user.delete({ where: { email } });
+      throw emailError;
+    }
 
     return NextResponse.json({ user: newUser }, { status: 201 });
 

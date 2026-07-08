@@ -1,6 +1,19 @@
 import nodemailer from "nodemailer";
 
 function createTransport() {
+  if (process.env.GOOGLE_EMAIL && process.env.GOOGLE_REFRESH_TOKEN) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        type: "OAuth2",
+        user: process.env.GOOGLE_EMAIL,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+      },
+    });
+  }
+
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT),
@@ -48,7 +61,7 @@ export async function sendInviteEmail({ name, email, role, hostUrl, signupUrl, i
 
   const info = await transport.sendMail({
     to: email,
-    from: `"TicketFlow" <noreply@ticketing-system.local>`,
+    from: process.env.GOOGLE_EMAIL ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>` : `"TicketFlow" <noreply@ticketing-system.local>`,
     subject,
     text: textBody,
     html: htmlBody,
