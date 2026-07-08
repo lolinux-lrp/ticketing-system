@@ -6,7 +6,7 @@ import {
   /*updateCommentSchema,*/ 
   deleteCommentSchema 
 } from "@/lib/validations/comments";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
