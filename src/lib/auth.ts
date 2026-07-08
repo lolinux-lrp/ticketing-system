@@ -32,42 +32,18 @@ export const authOptions: NextAuthOptions = {
         strategy: "jwt",
     },
     providers: [
-        (GoogleProvider as any).default ? (GoogleProvider as any).default({
-            clientId: process.env.GOOGLE_CLIENT_ID as string,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-            authorization: { params: { prompt: "select_account" } },
-        }) : GoogleProvider({
+        ((GoogleProvider as unknown as { default?: typeof GoogleProvider }).default || GoogleProvider)({
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
             authorization: { params: { prompt: "select_account" } },
         }),
-        (CredentialsProvider as any).default ? (CredentialsProvider as any).default({
+        ((CredentialsProvider as unknown as { default?: typeof CredentialsProvider }).default || CredentialsProvider)({
             name: "Credentials",
             credentials: {
                 email: { label: "Email", type: "email" },
                 password: { label: "Password", type: "password" },
             },
-            async authorize(credentials: any) {
-                const result = loginSchema.safeParse(credentials);
-                if (!result.success) return null;
-
-                const { email, password } = result.data;
-                const user = await prisma.user.findUnique({ where: { email } });
-
-                if (!user || !user.password) return null;
-
-                const isValidPassword = await bcrypt.compare(password, user.password);
-                if (!isValidPassword) return null;
-
-                return { id: user.id, name: user.name, email: user.email, role: user.role };
-            },
-        }) : CredentialsProvider({
-            name: "Credentials",
-            credentials: {
-                email: { label: "Email", type: "email" },
-                password: { label: "Password", type: "password" },
-            },
-            async authorize(credentials) {
+            async authorize(credentials: Record<"email" | "password", string> | undefined) {
                 const result = loginSchema.safeParse(credentials);
                 if (!result.success) return null;
 
@@ -112,7 +88,7 @@ export const authOptions: NextAuthOptions = {
                         });
                         // Override the user object so the session gets the right id/role
                         user.id = existingUser.id;
-                        (user as any).role = existingUser.role;
+                        (user as { id: string; role?: string }).role = existingUser.role;
                     }
                     // If Google already linked, NextAuth proceeds normally
                     return true;
