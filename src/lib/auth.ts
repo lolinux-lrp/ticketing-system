@@ -35,6 +35,7 @@ export const authOptions: NextAuthOptions = {
         ((GoogleProvider as unknown as { default?: typeof GoogleProvider }).default || GoogleProvider)({
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+            allowDangerousEmailAccountLinking: true,
             authorization: { params: { prompt: "select_account" } },
         }),
         ((CredentialsProvider as unknown as { default?: typeof CredentialsProvider }).default || CredentialsProvider)({
@@ -60,43 +61,6 @@ export const authOptions: NextAuthOptions = {
         }),
     ],
     callbacks: {
-        async signIn({ user, account }) {
-            if (account?.provider === "google" && user.email) {
-                const existingUser = await prisma.user.findUnique({
-                    where: { email: user.email },
-                    include: { accounts: { where: { provider: "google" } } },
-                });
-
-                if (existingUser) {
-                    // User exists — check if Google is already linked
-                    if (existingUser.accounts.length === 0) {
-                        // No Google account linked yet — safely link it now by exact email match
-                        await prisma.account.create({
-                            data: {
-                                userId: existingUser.id,
-                                type: account.type,
-                                provider: account.provider,
-                                providerAccountId: account.providerAccountId,
-                                access_token: account.access_token,
-                                refresh_token: account.refresh_token,
-                                expires_at: account.expires_at,
-                                token_type: account.token_type,
-                                scope: account.scope,
-                                id_token: account.id_token,
-                                session_state: account.session_state as string | null,
-                            },
-                        });
-                        // Override the user object so the session gets the right id/role
-                        user.id = existingUser.id;
-                        (user as { id: string; role?: string }).role = existingUser.role;
-                    }
-                    // If Google already linked, NextAuth proceeds normally
-                    return true;
-                }
-                // No existing user → NextAuth/PrismaAdapter creates a new CUSTOMER automatically
-            }
-            return true;
-        },
 
         async jwt({ token, user }) {
             if (user) {
