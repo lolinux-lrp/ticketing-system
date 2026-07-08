@@ -13,11 +13,7 @@ interface EditTicketModalProps {
   onClose: () => void;
 }
 
-export function EditTicketModal({
-  ticket,
-  isOpen,
-  onClose,
-}: EditTicketModalProps) {
+export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProps) {
   const [title, setTitle] = useState(ticket.title);
   const [description, setDescription] = useState(ticket.description);
   const [workDone, setWorkDone] = useState(ticket.workDone || "");
@@ -25,9 +21,6 @@ export function EditTicketModal({
   const [updateTicket, { isLoading }] = useUpdateTicketMutation();
   const { data: session } = useSession();
 
-  // Reset the form to the ticket's current values every time the modal opens.
-  // Adjusting state during render (rather than in an effect) avoids an
-  // extra cascading render pass.
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
@@ -39,14 +32,11 @@ export function EditTicketModal({
     }
   }
 
-  // Close on Escape.
   useEffect(() => {
     if (!isOpen) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -54,62 +44,65 @@ export function EditTicketModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
-
     try {
-      const body: any = {};
+      const body: Record<string, string> = {};
       if (title !== ticket.title) body.title = title;
       if (description !== ticket.description) body.description = description;
       if (workDone !== (ticket.workDone || "")) body.workDone = workDone;
 
-      await updateTicket({
-        id: ticket.id,
-        body,
-      }).unwrap();
+      await updateTicket({ id: ticket.id, body }).unwrap();
       onClose();
     } catch (err) {
-      setFormError(
-        extractErrorMessage(err, "Failed to update ticket. Please try again."),
-      );
+      setFormError(extractErrorMessage(err, "Failed to update ticket. Please try again."));
     }
   }
 
+  const isOwner = session?.user?.id === ticket.createdById;
+  const canEditWorkDone = session?.user?.role === "AGENT" || session?.user?.role === "ADMIN";
+
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
+    <div className="modal-overlay" onClick={onClose}>
       <div
+        className="modal-glass"
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-ticket-heading"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-950 p-6 shadow-xl"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2
-            id="edit-ticket-heading"
-            className="text-lg font-semibold text-slate-50"
-          >
-            Edit Ticket
-          </h2>
+        <div
+          className="flex items-center justify-between px-6 py-4 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div>
+            <h2
+              id="edit-ticket-heading"
+              className="text-base font-semibold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Edit Ticket
+            </h2>
+            <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--text-muted)" }}>
+              #{ticket.id.slice(-6).toUpperCase()}
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
+            className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+            style={{ color: "var(--text-muted)", background: "var(--surface-2)" }}
             aria-label="Close"
-            className="rounded-md px-2 py-1 text-slate-400 hover:bg-slate-900 hover:text-slate-200"
           >
-            ✕
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {session?.user?.id === ticket.createdById ? (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
+          {isOwner ? (
             <>
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="edit-title"
-                  className="text-sm font-medium text-slate-300"
-                >
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="edit-title" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   Title
                 </label>
                 <input
@@ -119,15 +112,13 @@ export function EditTicketModal({
                   required
                   minLength={2}
                   maxLength={200}
-                  className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-600"
+                  className="input-base"
+                  placeholder="Ticket title"
                 />
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="edit-description"
-                  className="text-sm font-medium text-slate-300"
-                >
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="edit-description" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   Description
                 </label>
                 <textarea
@@ -137,25 +128,32 @@ export function EditTicketModal({
                   required
                   minLength={10}
                   rows={4}
-                  className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-600"
+                  className="input-base"
+                  style={{ resize: "vertical" }}
                 />
               </div>
             </>
           ) : (
-            <div className="rounded-md bg-slate-900/50 border border-slate-800 p-4">
-              <p className="text-sm text-slate-400 mb-2">Original Ticket Details</p>
-              <h3 className="font-medium text-slate-200">{ticket.title}</h3>
-              <p className="text-sm text-slate-300 mt-1">{ticket.description}</p>
+            <div
+              className="rounded-xl p-4"
+              style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>
+                Original Ticket
+              </p>
+              <h3 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+                {ticket.title}
+              </h3>
+              <p className="text-sm mt-1.5 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {ticket.description}
+              </p>
             </div>
           )}
 
-          {(session?.user?.role === "AGENT" || session?.user?.role === "ADMIN") && (
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="edit-work-done"
-                className="text-sm font-medium text-slate-300"
-              >
-                Agent Progress (Work Done)
+          {canEditWorkDone && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-work-done" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Agent Progress
               </label>
               <textarea
                 id="edit-work-done"
@@ -163,33 +161,52 @@ export function EditTicketModal({
                 onChange={(e) => setWorkDone(e.target.value)}
                 placeholder="Describe the progress or work done so far..."
                 rows={3}
-                className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-600"
+                className="input-base"
+                style={{ resize: "vertical" }}
               />
             </div>
           )}
 
-          {formError && <p className="text-sm text-red-400">{formError}</p>}
+          {formError && (
+            <div
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm"
+              style={{ background: "rgba(239,68,68,0.08)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.2)" }}
+            >
+              {formError}
+            </div>
+          )}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex gap-3 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
             <button
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="rounded-md border border-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              style={{
+                background: "var(--surface-2)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+              }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="rounded-md bg-slate-50 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-slate-200 disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50"
+              style={{ background: "var(--brand)" }}
             >
-              {isLoading ? "Saving..." : "Save changes"}
+              {isLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : "Save Changes"}
             </button>
           </div>
         </form>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }

@@ -10,18 +10,24 @@ export default function AdminPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"AGENT" | "ADMIN">("AGENT");
-
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   const [inviteUser, { isLoading }] = useInviteUserMutation();
 
   if (status === "loading") {
-    return <div className="p-8 text-slate-400">Loading...</div>;
+    return (
+      <div className="p-8 flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
+        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        Loading...
+      </div>
+    );
   }
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || (session.user as any).role !== "ADMIN") {
     return (
-      <div className="p-8 text-red-500">
+      <div
+        className="m-8 p-4 rounded-xl text-sm font-medium"
+        style={{ background: "rgba(239,68,68,0.08)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.2)" }}
+      >
         Unauthorized. You must be an Admin to access this page.
       </div>
     );
@@ -30,74 +36,124 @@ export default function AdminPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-
     try {
-      await inviteUser({ name, email, role }).unwrap();
-      setMessage({ type: "success", text: "Invite sent successfully! The user will receive an email with instructions." });
-      setName("");
-      setEmail("");
-      setRole("AGENT");
+      const res = await inviteUser({ name, email, role }).unwrap();
+      const text = (res as any).message ?? "Invite sent! The user will receive an email with login instructions.";
+      setMessage({ type: "success", text });
+      setName(""); setEmail(""); setRole("AGENT");
     } catch (err: any) {
       setMessage({ type: "error", text: err?.data?.error || "Failed to invite user. Please try again." });
     }
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 p-8">
-      <h1 className="text-2xl font-semibold text-slate-50">Admin User Management</h1>
-      
-      <div className="rounded-lg border border-slate-800 bg-slate-950 p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-medium text-slate-200">Invite New Agent / Admin</h2>
-        
+    <div className="p-6 max-w-2xl mx-auto">
+      {/* Page header */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+          User Management
+        </h2>
+        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+          Invite new agents and administrators to your workspace.
+        </p>
+      </div>
+
+      {/* Invite card */}
+      <div
+        className="rounded-2xl p-6"
+        style={{
+          background: "var(--surface-1)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
+          Send an invite
+        </h3>
+
         {message && (
-          <div className={`mb-4 rounded p-3 text-sm font-medium ${message.type === "success" ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"}`}>
+          <div
+            className="mb-4 px-3 py-2.5 rounded-lg text-sm font-medium"
+            style={
+              message.type === "success"
+                ? { background: "rgba(34,197,94,0.08)", color: "#16a34a", border: "1px solid rgba(34,197,94,0.2)" }
+                : { background: "rgba(239,68,68,0.08)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.2)" }
+            }
+          >
             {message.text}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-300">Full Name</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="admin-name" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Full name
+            </label>
             <input
+              id="admin-name"
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="input-base"
               placeholder="Jane Doe"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-300">Email Address</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="admin-email" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Email address
+            </label>
             <input
+              id="admin-email"
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="input-base"
               placeholder="jane@company.com"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-300">Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as "AGENT" | "ADMIN")}
-              className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            >
-              <option value="AGENT">Agent (Can manage tickets)</option>
-              <option value="ADMIN">Admin (Full access)</option>
-            </select>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Role
+            </label>
+            <div className="flex gap-2">
+              {(["AGENT", "ADMIN"] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(r)}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all"
+                  style={{
+                    background: role === r ? "var(--brand)" : "var(--surface-2)",
+                    color: role === r ? "white" : "var(--text-secondary)",
+                    border: `1px solid ${role === r ? "var(--brand)" : "var(--border)"}`,
+                  }}
+                >
+                  {r === "AGENT" ? "Agent" : "Admin"}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              {role === "AGENT"
+                ? "Agents can manage and respond to tickets."
+                : "Admins have full access including user management."}
+            </p>
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="mt-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50"
+            style={{ background: "var(--brand)" }}
           >
-            {isLoading ? "Sending Invite..." : "Send Invite"}
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Sending invite...
+              </span>
+            ) : "Send Invite"}
           </button>
         </form>
       </div>

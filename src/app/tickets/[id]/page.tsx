@@ -1,149 +1,293 @@
 "use client";
 
-import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
-    useGetTicketQuery,
-    useUpdateTicketMutation,
-    useGetAgentsQuery,
+  useGetTicketQuery,
+  useUpdateTicketMutation,
+  useGetAgentsQuery,
 } from "@/store/ticketsApi";
 import { TicketCommentsSection } from "@/components/comments/TicketCommentsSection";
 import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
+import { StatusBadge } from "@/components/tickets/StatusBadge";
+import { PriorityBadge } from "@/components/tickets/PriorityBadge";
+import type { Status, Priority } from "@/types";
 
-const statusOptions = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
-const priorityOptions = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const statusOptions: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+const priorityOptions: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
-const statusColors: Record<string, string> = {
-    OPEN: "bg-blue-100 text-blue-700",
-    IN_PROGRESS: "bg-yellow-100 text-yellow-700",
-    RESOLVED: "bg-green-100 text-green-700",
-    CLOSED: "bg-gray-100 text-gray-700",
-};
-
-const priorityColors: Record<string, string> = {
-    LOW: "bg-gray-100 text-gray-600",
-    MEDIUM: "bg-blue-100 text-blue-600",
-    HIGH: "bg-orange-100 text-orange-600",
-    URGENT: "bg-red-100 text-red-600",
-};
+function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        {label}
+      </span>
+      <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export default function TicketDetailPage() {
-    const params = useParams();
-    const ticketId = params.id as string;
-    const { data: session } = useSession();
-    const { data, isLoading, isError } = useGetTicketQuery(ticketId);
-    const { data: agents } = useGetAgentsQuery(undefined, {
-        skip: session?.user?.role !== "ADMIN",
-    });
-    const [updateTicket] = useUpdateTicketMutation();
+  const params = useParams();
+  const ticketId = params.id as string;
+  const { data: session } = useSession();
+  const { data, isLoading, isError } = useGetTicketQuery(ticketId);
+  const { data: agents } = useGetAgentsQuery(undefined, {
+    skip: session?.user?.role !== "ADMIN",
+  });
+  const [updateTicket] = useUpdateTicketMutation();
 
-    const isAdmin = session?.user?.role === "ADMIN";
-    const isAgent = session?.user?.role === "AGENT";
-    const canManage = isAdmin || isAgent;
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isAgent = session?.user?.role === "AGENT";
+  const canManage = isAdmin || isAgent;
 
-    if (isLoading) return <div className="p-8 text-gray-500">Loading ticket...</div>;
-    if (isError || !data) return <div className="p-8 text-red-600">Failed to load ticket.</div>;
-
-    const { ticket } = data;
-
+  if (isLoading) {
     return (
-        <div className="p-8 max-w-3xl mx-auto">
-            <Link href="/dashboard" className="text-sm text-blue-600 hover:underline">
-                ← Back to dashboard
-            </Link>
-
-            <div className="mt-4 bg-white border rounded-lg p-6">
-                <div className="flex justify-between items-start gap-4">
-                    <h1 className="text-xl font-semibold">{ticket.title}</h1>
-                    <div className="flex gap-2 shrink-0">
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[ticket.status]}`}>
-                            {ticket.status.replace("_", " ")}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${priorityColors[ticket.priority]}`}>
-                            {ticket.priority}
-                        </span>
-                    </div>
-                </div>
-
-                <p className="text-gray-700 mt-3">{ticket.description}</p>
-
-                {ticket.workDone && (
-                    <div className="mt-4 p-4 bg-slate-50 border rounded-md">
-                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Agent Progress</h3>
-                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{ticket.workDone}</p>
-                    </div>
-                )}
-
-                <div className="text-sm text-gray-500 mt-4 space-y-1">
-                    <p>Created by {ticket.createdBy?.name}</p>
-                    <p>Assigned to {ticket.assignedTo?.name ?? "Unassigned"}</p>
-                </div>
-
-                {canManage && (
-                    <div className="flex gap-3 mt-4 pt-4 border-t">
-                        <div>
-                            <label className="block text-xs text-gray-500 mb-1">Status</label>
-                            <select
-                                value={ticket.status}
-                                onChange={(e) => updateTicket({ id: ticketId, body: { status: e.target.value as any } })}
-                                className="border rounded px-2 py-1 text-sm"
-                            >
-                                {statusOptions.map((s) => (
-                                    <option key={s} value={s}>{s.replace("_", " ")}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs text-gray-500 mb-1">Priority</label>
-                            <select
-                                value={ticket.priority}
-                                onChange={(e) => updateTicket({ id: ticketId, body: { priority: e.target.value as any } })}
-                                className="border rounded px-2 py-1 text-sm"
-                            >
-                                {priorityOptions.map((p) => (
-                                    <option key={p} value={p}>{p}</option>
-                                ))}
-                            </select>
-                        </div>
-                        {isAdmin && (
-                            <div>
-                                <label className="block text-xs text-gray-500 mb-1">Assignee</label>
-                                <AssigneeSearch
-                                    agents={agents}
-                                    assignedToId={ticket.assignedToId}
-                                    onChange={(newId) => updateTicket({ id: ticketId, body: { assignedToId: newId } })}
-                                />
-                            </div>
-                        )}
-                        {isAgent && ticket.assignedToId !== session?.user?.id && (
-                            <div className="flex items-end">
-                                <button
-                                    onClick={() => updateTicket({ id: ticketId, body: { assignedToId: session?.user?.id } })}
-                                    className="border rounded px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200"
-                                >
-                                    Assign to me
-                                </button>
-                            </div>
-                        )}
-                        {isAgent && ticket.assignedToId === session?.user?.id && (
-                            <div className="flex items-end">
-                                <button
-                                    onClick={() => updateTicket({ id: ticketId, body: { assignedToId: null } })}
-                                    className="border rounded px-3 py-1 text-sm text-red-600 bg-red-50 hover:bg-red-100"
-                                >
-                                    Unassign
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
+      <div className="p-8 max-w-6xl mx-auto">
+        <div className="animate-pulse">
+          <div className="h-4 w-32 rounded mb-6" style={{ background: "var(--surface-2)" }} />
+          <div className="flex gap-8">
+            <div className="flex-1 space-y-4">
+              <div className="h-8 w-3/4 rounded" style={{ background: "var(--surface-2)" }} />
+              <div className="h-4 w-full rounded" style={{ background: "var(--surface-2)" }} />
+              <div className="h-4 w-5/6 rounded" style={{ background: "var(--surface-2)" }} />
             </div>
-
-            <div className="mt-8 border-t pt-8">
-                <TicketCommentsSection ticketId={ticketId} />
+            <div className="w-72 space-y-3 shrink-0">
+              <div className="h-24 rounded-xl" style={{ background: "var(--surface-2)" }} />
             </div>
+          </div>
         </div>
+      </div>
     );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Failed to load ticket.</p>
+      </div>
+    );
+  }
+
+  const { ticket } = data;
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+          style={{ color: "var(--text-muted)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+          All Tickets
+        </Link>
+      </div>
+
+      <div className="flex gap-6 items-start">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-3">
+            <span
+              className="font-mono text-xs px-2 py-0.5 rounded"
+              style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}
+            >
+              #{ticket.id.slice(-6).toUpperCase()}
+            </span>
+            <StatusBadge status={ticket.status} />
+            <PriorityBadge priority={ticket.priority} />
+          </div>
+
+          <h1
+            className="text-2xl font-bold tracking-tight leading-snug mb-4"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {ticket.title}
+          </h1>
+
+          <div
+            className="rounded-xl p-5 mb-4"
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
+              Description
+            </p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+              {ticket.description}
+            </p>
+          </div>
+
+          {ticket.workDone && (
+            <div
+              className="rounded-xl p-5 mb-4"
+              style={{
+                background: "rgba(99,102,241,0.04)",
+                border: "1px solid rgba(99,102,241,0.15)",
+              }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--brand)" }}>
+                Agent Progress
+              </p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+                {ticket.workDone}
+              </p>
+            </div>
+          )}
+
+          <div
+            className="rounded-xl p-5"
+            style={{
+              background: "var(--surface-0)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <TicketCommentsSection ticketId={ticketId} />
+          </div>
+        </div>
+
+        <div
+          className="w-72 shrink-0 flex flex-col gap-3"
+          style={{ position: "sticky", top: "calc(var(--topbar-height) + 24px)" }}
+        >
+          {canManage && (
+            <div
+              className="rounded-xl p-4 flex flex-col gap-4"
+              style={{
+                background: "var(--surface-1)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Manage
+              </p>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Status
+                </label>
+                <select
+                  value={ticket.status}
+                  onChange={(e) =>
+                    updateTicket({ id: ticketId, body: { status: e.target.value as Status } })
+                  }
+                  className="input-base cursor-pointer"
+                  style={{ fontSize: "13px", padding: "7px 10px" }}
+                >
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s}>{s.replace("_", " ")}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Priority
+                </label>
+                <select
+                  value={ticket.priority}
+                  onChange={(e) =>
+                    updateTicket({ id: ticketId, body: { priority: e.target.value as Priority } })
+                  }
+                  className="input-base cursor-pointer"
+                  style={{ fontSize: "13px", padding: "7px 10px" }}
+                >
+                  {priorityOptions.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {isAdmin && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    Assignee
+                  </label>
+                  <AssigneeSearch
+                    agents={agents}
+                    assignedToId={ticket.assignedToId}
+                    onChange={(newId) =>
+                      updateTicket({ id: ticketId, body: { assignedToId: newId } })
+                    }
+                  />
+                </div>
+              )}
+
+              {isAgent && ticket.assignedToId !== session?.user?.id && (
+                <button
+                  onClick={() =>
+                    updateTicket({ id: ticketId, body: { assignedToId: session?.user?.id } })
+                  }
+                  className="w-full py-2 rounded-lg text-xs font-semibold transition-colors"
+                  style={{
+                    background: "var(--brand-subtle)",
+                    color: "var(--brand)",
+                    border: "1px solid var(--brand)",
+                  }}
+                >
+                  Assign to me
+                </button>
+              )}
+              {isAgent && ticket.assignedToId === session?.user?.id && (
+                <button
+                  onClick={() =>
+                    updateTicket({ id: ticketId, body: { assignedToId: null } })
+                  }
+                  className="w-full py-2 rounded-lg text-xs font-semibold transition-colors"
+                  style={{
+                    background: "rgba(239,68,68,0.06)",
+                    color: "#ef4444",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                  }}
+                >
+                  Unassign me
+                </button>
+              )}
+            </div>
+          )}
+
+          <div
+            className="rounded-xl p-4 flex flex-col gap-3"
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Details
+            </p>
+
+            <MetaRow label="Created by" value={ticket.createdBy?.name ?? "—"} />
+            <MetaRow
+              label="Assigned to"
+              value={ticket.assignedTo?.name ?? (
+                <span style={{ color: "var(--text-muted)" }}>Unassigned</span>
+              )}
+            />
+            <div className="h-px" style={{ background: "var(--border)" }} />
+            <MetaRow
+              label="Created"
+              value={new Date(ticket.createdAt).toLocaleDateString("en-US", {
+                year: "numeric", month: "short", day: "numeric",
+              })}
+            />
+            <MetaRow
+              label="Last updated"
+              value={new Date(ticket.updatedAt).toLocaleDateString("en-US", {
+                year: "numeric", month: "short", day: "numeric",
+              })}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

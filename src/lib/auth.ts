@@ -1,13 +1,30 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
-import nodemailer from "nodemailer";
 import type { Adapter } from "next-auth/adapters";
+
+declare module "next-auth" {
+    interface Session {
+        user: {
+            id: string;
+            name?: string | null;
+            email?: string | null;
+            image?: string | null;
+            role: string;
+        };
+    }
+}
+
+declare module "next-auth/jwt" {
+    interface JWT {
+        id: string;
+        role: string;
+    }
+}
 
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma) as Adapter,
@@ -18,68 +35,11 @@ export const authOptions: NextAuthOptions = {
         (GoogleProvider as any).default ? (GoogleProvider as any).default({
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+            authorization: { params: { prompt: "select_account" } },
         }) : GoogleProvider({
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-        }),
-        (EmailProvider as any).default ? (EmailProvider as any).default({
-            server: {
-                host: process.env.SMTP_HOST,
-                port: Number(process.env.SMTP_PORT),
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASSWORD,
-                },
-            },
-            from: "noreply@ticketing-system.local",
-            sendVerificationRequest: async ({ identifier, url, provider }: any) => {
-                const { host } = new URL(url);
-                const transport = nodemailer.createTransport(provider.server);
-                const result = await transport.sendMail({
-                    to: identifier,
-                    from: provider.from,
-                    subject: `Sign in to ${host}`,
-                    text: `Sign in to ${host}\n${url}\n\n`,
-                    html: `<p>Sign in to <strong>${host}</strong></p><p><a href="${url}">Click here to sign in</a></p>`,
-                });
-                
-                // For development, we print the Ethereal link directly to the console
-                // so the user doesn't have to log into Ethereal to click the link!
-                console.log("=========================================");
-                console.log("📬 MAGIC LINK GENERATED! ");
-                console.log("Direct Link (Click to login): %s", url);
-                console.log("Ethereal Preview URL: %s", nodemailer.getTestMessageUrl(result));
-                console.log("=========================================");
-            }
-        }) : EmailProvider({
-            server: {
-                host: process.env.SMTP_HOST,
-                port: Number(process.env.SMTP_PORT),
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASSWORD,
-                },
-            },
-            from: "noreply@ticketing-system.local",
-            sendVerificationRequest: async ({ identifier, url, provider }: any) => {
-                const { host } = new URL(url);
-                const transport = nodemailer.createTransport(provider.server);
-                const result = await transport.sendMail({
-                    to: identifier,
-                    from: provider.from,
-                    subject: `Sign in to ${host}`,
-                    text: `Sign in to ${host}\n${url}\n\n`,
-                    html: `<p>Sign in to <strong>${host}</strong></p><p><a href="${url}">Click here to sign in</a></p>`,
-                });
-                
-                // For development, we print the Ethereal link directly to the console
-                // so the user doesn't have to log into Ethereal to click the link!
-                console.log("=========================================");
-                console.log("📬 MAGIC LINK GENERATED! ");
-                console.log("Direct Link (Click to login): %s", url);
-                console.log("Ethereal Preview URL: %s", nodemailer.getTestMessageUrl(result));
-                console.log("=========================================");
-            }
+            authorization: { params: { prompt: "select_account" } },
         }),
         (CredentialsProvider as any).default ? (CredentialsProvider as any).default({
             name: "Credentials",
@@ -89,33 +49,17 @@ export const authOptions: NextAuthOptions = {
             },
             async authorize(credentials: any) {
                 const result = loginSchema.safeParse(credentials);
-
-                if (!result.success) {
-                    return null;
-                }
+                if (!result.success) return null;
 
                 const { email, password } = result.data;
+                const user = await prisma.user.findUnique({ where: { email } });
 
-                const user = await prisma.user.findUnique({
-                    where: { email },
-                });
-
-                if (!user || !user.password) {
-                    return null;
-                }
+                if (!user || !user.password) return null;
 
                 const isValidPassword = await bcrypt.compare(password, user.password);
+                if (!isValidPassword) return null;
 
-                if (!isValidPassword) {
-                    return null;
-                }
-
-                return {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                };
+                return { id: user.id, name: user.name, email: user.email, role: user.role };
             },
         }) : CredentialsProvider({
             name: "Credentials",
@@ -125,48 +69,71 @@ export const authOptions: NextAuthOptions = {
             },
             async authorize(credentials) {
                 const result = loginSchema.safeParse(credentials);
-
-                if (!result.success) {
-                    return null;
-                }
+                if (!result.success) return null;
 
                 const { email, password } = result.data;
+                const user = await prisma.user.findUnique({ where: { email } });
 
-                const user = await prisma.user.findUnique({
-                    where: { email },
-                });
-
-                if (!user || !user.password) {
-                    return null;
-                }
+                if (!user || !user.password) return null;
 
                 const isValidPassword = await bcrypt.compare(password, user.password);
+                if (!isValidPassword) return null;
 
-                if (!isValidPassword) {
-                    return null;
-                }
-
-                return {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                };
+                return { id: user.id, name: user.name, email: user.email, role: user.role };
             },
         }),
     ],
     callbacks: {
+        async signIn({ user, account }) {
+            if (account?.provider === "google" && user.email) {
+                const existingUser = await prisma.user.findUnique({
+                    where: { email: user.email },
+                    include: { accounts: { where: { provider: "google" } } },
+                });
+
+                if (existingUser) {
+                    // User exists — check if Google is already linked
+                    if (existingUser.accounts.length === 0) {
+                        // No Google account linked yet — safely link it now by exact email match
+                        await prisma.account.create({
+                            data: {
+                                userId: existingUser.id,
+                                type: account.type,
+                                provider: account.provider,
+                                providerAccountId: account.providerAccountId,
+                                access_token: account.access_token,
+                                refresh_token: account.refresh_token,
+                                expires_at: account.expires_at,
+                                token_type: account.token_type,
+                                scope: account.scope,
+                                id_token: account.id_token,
+                                session_state: account.session_state as string | null,
+                            },
+                        });
+                        // Override the user object so the session gets the right id/role
+                        user.id = existingUser.id;
+                        (user as any).role = existingUser.role;
+                    }
+                    // If Google already linked, NextAuth proceeds normally
+                    return true;
+                }
+                // No existing user → NextAuth/PrismaAdapter creates a new CUSTOMER automatically
+            }
+            return true;
+        },
+
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id;
-                token.role = (user as any).role || "CUSTOMER"; // Default to customer if not set
+                token.role = (user as { id: string; role?: string }).role ?? "CUSTOMER";
             }
             return token;
         },
+
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).id = token.id;
-                (session.user as any).role = token.role;
+                session.user.id = token.id;
+                session.user.role = token.role;
             }
             return session;
         },

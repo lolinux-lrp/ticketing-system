@@ -62,11 +62,11 @@ export async function GET(req: NextRequest) {
     const { search, status, priority, createdById, sortBy, order } =
       validation.data;
 
-    // Full-text search path
     if (search) {
       const isCustomer = session.user.role === "CUSTOMER";
 
-      const rawTickets = await prisma.$queryRaw<any[]>`
+      type RawTicketRow = { id: string; rank: number };
+      const rawTickets = await prisma.$queryRaw<RawTicketRow[]>`
         SELECT t.id,
           ts_rank(t."searchVector", websearch_to_tsquery('english', ${search})) AS rank
         FROM "Ticket" t
@@ -101,7 +101,6 @@ export async function GET(req: NextRequest) {
       createdById,
     };
 
-    // Customers only ever see their own tickets, regardless of createdById passed in
     if (session.user.role === "CUSTOMER") {
       where.createdById = session.user.id;
     }
