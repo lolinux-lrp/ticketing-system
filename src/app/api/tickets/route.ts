@@ -65,33 +65,25 @@ export async function GET(req: NextRequest) {
     if (search) {
       const isCustomer = session.user.role === "CUSTOMER";
 
-      type RawTicketRow = { id: string; rank: number };
-      const rawTickets = await prisma.$queryRaw<RawTicketRow[]>`
-        SELECT t.id,
-          ts_rank(t."searchVector", websearch_to_tsquery('english', ${search})) AS rank
-        FROM "Ticket" t
-        WHERE t."searchVector" @@ websearch_to_tsquery('english', ${search})
-          ${status ? Prisma.sql`AND t.status = ${status}::"Status"` : Prisma.empty}
-          ${priority ? Prisma.sql`AND t.priority = ${priority}::"Priority"` : Prisma.empty}
-          ${isCustomer ? Prisma.sql`AND t."createdById" = ${session.user.id}` : Prisma.empty}
-        ORDER BY rank DESC
-        LIMIT 50
-      `;
-
-      const ticketIds = rawTickets.map((t) => t.id);
-      const withRelations = await prisma.ticket.findMany({
-        where: { id: { in: ticketIds } },
+      const tickets = await prisma.ticket.findMany({
+        where: {
+          OR: [
+            { title: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
+          ],
+          ...(status ? { status } : {}),
+          ...(priority ? { priority } : {}),
+          ...(isCustomer ? { createdById: session.user.id } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
         include: {
           assignedTo: { select: { id: true, name: true, role: true } },
           createdBy: { select: { id: true, name: true, role: true } },
         },
       });
 
-      const ordered = ticketIds
-        .map((id) => withRelations.find((t) => t.id === id))
-        .filter(Boolean);
-
-      return NextResponse.json({ data: ordered });
+      return NextResponse.json({ data: tickets });
     }
 
     // Normal filtered query (no search term)
