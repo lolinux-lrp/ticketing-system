@@ -7,24 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import type { Adapter } from "next-auth/adapters";
 
-declare module "next-auth" {
-    interface Session {
-        user: {
-            id: string;
-            name?: string | null;
-            email?: string | null;
-            image?: string | null;
-            role: string;
-        };
-    }
-}
-
-declare module "next-auth/jwt" {
-    interface JWT {
-        id: string;
-        role: string;
-    }
-}
 
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma) as Adapter,
@@ -61,7 +43,7 @@ export const authOptions: NextAuthOptions = {
         }),
     ],
     callbacks: {
-        async jwt({ token, user, account }) {
+        async jwt({ token, user }) {
             if (user) {
                 // Fresh login — look up from DB to get authoritative id + role
                 const dbUser = await prisma.user.findUnique({
@@ -74,7 +56,7 @@ export const authOptions: NextAuthOptions = {
                 } else {
                     // Fallback for brand-new OAuth users not yet in DB
                     token.id = user.id;
-                    token.role = (user as any).role ?? "CUSTOMER";
+                    token.role = user.role ?? "CUSTOMER";
                 }
                 // Tag the token with the email so we can detect mismatches on refresh
                 token.email = user.email;
