@@ -61,19 +61,45 @@ export const authOptions: NextAuthOptions = {
         }),
     ],
     callbacks: {
-
-        async jwt({ token, user }) {
+        async jwt({ token, user, account }) {
             if (user) {
-                token.id = user.id;
-                token.role = (user as { id: string; role?: string }).role ?? "CUSTOMER";
+                // Fresh login — look up from DB to get authoritative id + role
+                const dbUser = await prisma.user.findUnique({
+                    where: { email: user.email! },
+                    select: { id: true, role: true },
+                });
+                if (dbUser) {
+                    token.id = dbUser.id;
+                    token.role = dbUser.role;
+                } else {
+                    // Fallback for brand-new OAuth users not yet in DB
+                    token.id = user.id;
+                    token.role = (user as any).role ?? "CUSTOMER";
+                }
+                // Tag the token with the email so we can detect mismatches on refresh
+                token.email = user.email;
+            } else if (token.id) {
+                // Token refresh — re-validate against DB to prevent stale sessions
+                const dbUser = await prisma.user.findUnique({
+                    where: { id: token.id },
+                    select: { id: true, role: true, email: true },
+                });
+                if (!dbUser) {
+                    // User was deleted — invalidate the token
+                    return {} as typeof token;
+                }
+                token.role = dbUser.role;
+                token.email = dbUser.email;
             }
             return token;
         },
 
         async session({ session, token }) {
-            if (session.user) {
+            if (session.user && token.id) {
                 session.user.id = token.id;
                 session.user.role = token.role;
+                // Ensure the session email always matches the DB user
+                session.user.email = token.email as string;
             }
             return session;
         },

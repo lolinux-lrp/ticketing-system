@@ -25,6 +25,14 @@ function IconAdmin() {
     </svg>
   );
 }
+function IconAccount() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+    </svg>
+  );
+}
 function IconSignOut() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -138,13 +146,28 @@ export function Sidebar() {
             />
           </>
         )}
+
+        <p
+          className="px-2 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Account
+        </p>
+        <NavItem
+          href="/account"
+          label="Account Settings"
+          icon={<IconAccount />}
+          isActive={pathname === "/account"}
+        />
       </div>
 
       <div
         className="p-3 shrink-0"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}
       >
-        <div className="flex items-center gap-2.5 p-2 rounded-lg" style={{ background: "var(--surface-2)" }}>
+        <Link href="/account" className="flex items-center gap-2.5 p-2 rounded-lg transition-colors" style={{ background: "var(--surface-2)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-1)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--surface-2))")}>
           <div
             className="avatar w-7 h-7 text-white shrink-0"
             style={{ background: avatarBg, fontSize: "10px" }}
@@ -168,7 +191,7 @@ export function Sidebar() {
           </div>
 
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={(e) => { e.preventDefault(); signOut({ callbackUrl: "/login" }); }}
             title="Sign out"
             className="shrink-0 p-1 rounded-md transition-colors"
             style={{ color: "var(--text-muted)" }}
@@ -183,7 +206,7 @@ export function Sidebar() {
           >
             <IconSignOut />
           </button>
-        </div>
+        </Link>
 
         <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
           {role}
