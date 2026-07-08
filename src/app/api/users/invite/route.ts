@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import { sendInviteEmail } from "@/lib/email";
+import { randomBytes } from "crypto";
 
 const inviteSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -70,12 +71,21 @@ export async function POST(req: NextRequest) {
       }, { status: 200 });
     }
 
-    // New user — create with no password (they must sign in via Google or set a password via signup)
+    // New user — create with no password, then issue a single-use invite token
     const newUser = await prisma.user.create({
       data: { name, email, role, password: null },
     });
 
-    await sendInviteEmail({ name, email, role, hostUrl, isUpgrade: false });
+    // Generate a 32-byte random token bound to this email, valid for 48 hours
+    const token = randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    await prisma.verificationToken.create({
+      data: { identifier: email, token, expires },
+    });
+
+    // Signup URL embeds token so only the recipient can claim the account
+    const signupUrl = `${hostUrl}/signup?token=${token}&email=${encodeURIComponent(email)}`;
+    await sendInviteEmail({ name, email, role, signupUrl, isUpgrade: false });
 
     return NextResponse.json({ user: newUser }, { status: 201 });
 

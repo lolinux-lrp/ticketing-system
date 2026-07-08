@@ -15,14 +15,15 @@ interface InviteEmailOptions {
   name: string;
   email: string;
   role: "AGENT" | "ADMIN";
-  hostUrl: string;
+  hostUrl?: string; // Optional since we might pass signupUrl instead
+  signupUrl?: string;
   isUpgrade: boolean;
 }
 
-export async function sendInviteEmail({ name, email, role, hostUrl, isUpgrade }: InviteEmailOptions) {
+export async function sendInviteEmail({ name, email, role, hostUrl, signupUrl, isUpgrade }: InviteEmailOptions) {
   const transport = createTransport();
-  const loginUrl = `${hostUrl}/login`;
-  const signupUrl = `${hostUrl}/signup`;
+  const loginUrl = `${hostUrl || new URL(signupUrl!).origin}/login`;
+  const finalSignupUrl = signupUrl || `${hostUrl}/signup`;
 
   const subject = isUpgrade
     ? `Your role has been updated to ${role} on TicketFlow`
@@ -30,7 +31,7 @@ export async function sendInviteEmail({ name, email, role, hostUrl, isUpgrade }:
 
   const textBody = isUpgrade
     ? `Hello ${name},\n\nYour role on TicketFlow has been upgraded to ${role}.\nSign in at: ${loginUrl}\n`
-    : `Hello ${name},\n\nYou have been invited to TicketFlow as ${role === "ADMIN" ? "an Admin" : "an Agent"}.\n\nIf you already have a Google account, sign in with Google at:\n${loginUrl}\n\nOr create a password-based account at:\n${signupUrl}\n\nWelcome aboard!`;
+    : `Hello ${name},\n\nYou have been invited to TicketFlow as ${role === "ADMIN" ? "an Admin" : "an Agent"}.\n\nIf you already have a Google account, sign in with Google at:\n${loginUrl}\n\nOr create a password-based account at:\n${finalSignupUrl}\n\nWelcome aboard!`;
 
   const htmlBody = isUpgrade
     ? `<p>Hello <strong>${name}</strong>,</p>
@@ -41,7 +42,7 @@ export async function sendInviteEmail({ name, email, role, hostUrl, isUpgrade }:
        <p>You can sign in using:</p>
        <ul>
          <li><a href="${loginUrl}">Sign in with Google</a> (if you have a Google account)</li>
-         <li><a href="${signupUrl}">Create a password-based account</a></li>
+         <li><a href="${finalSignupUrl}">Create a password-based account</a></li>
        </ul>
        <p>Welcome aboard!</p>`;
 

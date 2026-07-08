@@ -15,6 +15,7 @@ export const signupSchema = z.object({
         .string()
         .min(6, "Password must be at least 6 characters")
         .max(100, "Password is too long"),
+    token: z.string().optional(),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;

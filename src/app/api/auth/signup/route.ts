@@ -15,7 +15,7 @@ export async function POST(req: Request) {
             );
         }
 
-        const { name, email, password } = result.data;
+        const { name, email, password, token } = result.data;
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -29,11 +29,34 @@ export async function POST(req: Request) {
                 );
             }
 
+            if (!token) {
+                return NextResponse.json(
+                    { error: "An invite token is required to complete registration for this email." },
+                    { status: 403 }
+                );
+            }
+
+            const verificationToken = await prisma.verificationToken.findUnique({
+                where: { identifier_token: { identifier: email, token } },
+            });
+
+            if (!verificationToken || verificationToken.expires < new Date()) {
+                return NextResponse.json(
+                    { error: "Invalid or expired invite token." },
+                    { status: 403 }
+                );
+            }
+
             // Invited user (exists in DB but no password yet) — set their password
             // and update name, but KEEP their assigned role (AGENT/ADMIN/CUSTOMER)
             const updated = await prisma.user.update({
                 where: { email },
                 data: { name, password: hashedPassword },
+            });
+
+            // Consume the invite token
+            await prisma.verificationToken.delete({
+                where: { identifier_token: { identifier: email, token } },
             });
 
             const { password: _, ...userWithoutPassword } = updated;
