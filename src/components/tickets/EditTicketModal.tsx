@@ -21,7 +21,6 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
   const [updateTicket, { isLoading }] = useUpdateTicketMutation();
   const { data: session } = useSession();
 
-  // Reset on open
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
@@ -33,7 +32,6 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
     }
   }
 
-  // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -71,7 +69,6 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
         aria-labelledby="edit-ticket-heading"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b"
           style={{ borderColor: "var(--border)" }}
@@ -101,7 +98,6 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
           {isOwner ? (
             <>

@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { 
   createCommentSchema, 
   getCommentSchema, 
-  /*updateCommentSchema,*/ 
   deleteCommentSchema 
 } from "@/lib/validations/comments";
 import { getServerSession } from "next-auth";
@@ -17,9 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    
-    // Inject user ID for validation to pass, overriding any client-provided authorId
-    body.authorId = session.user.id;
+        body.authorId = session.user.id;
     
     const validation = createCommentSchema.safeParse(body);
 
@@ -28,8 +25,6 @@ export async function POST(req: NextRequest) {
     }
 
     const { ticketId, content } = validation.data;
-
-    // Check if ticket exists and user is allowed to comment
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
     });

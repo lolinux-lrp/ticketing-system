@@ -7,7 +7,6 @@ import { Sidebar } from "@/components/Navigation";
 import { TopBar } from "./TopBar";
 import { CreateTicketSlideOver } from "@/components/tickets/CreateTicketForm";
 
-// Routes that should render WITHOUT the sidebar shell
 const SHELL_EXCLUDED = ["/", "/login", "/signup"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -26,7 +25,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell">
-      {/* Sidebar */}
       <div
         className="sidebar-area border-r"
         style={{
@@ -37,7 +35,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
       </div>
 
-      {/* Right workspace: topbar + scrollable content */}
       <div className="workspace-area">
         <TopBar onOpenCreate={() => setIsCreateOpen(true)} />
 
@@ -46,7 +43,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Global slide-over for new ticket creation */}
       <CreateTicketSlideOver
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}

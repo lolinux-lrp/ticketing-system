@@ -44,7 +44,6 @@ export default function TicketDetailPage() {
   const isAgent = session?.user?.role === "AGENT";
   const canManage = isAdmin || isAgent;
 
-  // ── Loading ────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="p-8 max-w-6xl mx-auto">
@@ -77,7 +76,6 @@ export default function TicketDetailPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* Breadcrumb */}
       <div className="mb-6">
         <Link
           href="/dashboard"
@@ -93,11 +91,8 @@ export default function TicketDetailPage() {
         </Link>
       </div>
 
-      {/* Two-column layout */}
       <div className="flex gap-6 items-start">
-        {/* ── LEFT COLUMN ─────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
-          {/* Ticket ID + badges */}
           <div className="flex items-center gap-2 mb-3">
             <span
               className="font-mono text-xs px-2 py-0.5 rounded"
@@ -109,7 +104,6 @@ export default function TicketDetailPage() {
             <PriorityBadge priority={ticket.priority} />
           </div>
 
-          {/* Title */}
           <h1
             className="text-2xl font-bold tracking-tight leading-snug mb-4"
             style={{ color: "var(--text-primary)" }}
@@ -117,7 +111,6 @@ export default function TicketDetailPage() {
             {ticket.title}
           </h1>
 
-          {/* Description */}
           <div
             className="rounded-xl p-5 mb-4"
             style={{
@@ -133,7 +126,6 @@ export default function TicketDetailPage() {
             </p>
           </div>
 
-          {/* Agent Progress */}
           {ticket.workDone && (
             <div
               className="rounded-xl p-5 mb-4"
@@ -151,7 +143,6 @@ export default function TicketDetailPage() {
             </div>
           )}
 
-          {/* Comments thread */}
           <div
             className="rounded-xl p-5"
             style={{
@@ -163,12 +154,10 @@ export default function TicketDetailPage() {
           </div>
         </div>
 
-        {/* ── RIGHT COLUMN: sticky metadata ───────────────────────── */}
         <div
           className="w-72 shrink-0 flex flex-col gap-3"
           style={{ position: "sticky", top: "calc(var(--topbar-height) + 24px)" }}
         >
-          {/* Manage panel */}
           {canManage && (
             <div
               className="rounded-xl p-4 flex flex-col gap-4"
@@ -181,7 +170,6 @@ export default function TicketDetailPage() {
                 Manage
               </p>
 
-              {/* Status */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   Status
@@ -200,7 +188,6 @@ export default function TicketDetailPage() {
                 </select>
               </div>
 
-              {/* Priority */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   Priority
@@ -219,7 +206,6 @@ export default function TicketDetailPage() {
                 </select>
               </div>
 
-              {/* Assignee — ADMIN */}
               {isAdmin && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
@@ -235,7 +221,6 @@ export default function TicketDetailPage() {
                 </div>
               )}
 
-              {/* Assign to me — AGENT */}
               {isAgent && ticket.assignedToId !== session?.user?.id && (
                 <button
                   onClick={() =>
@@ -269,7 +254,6 @@ export default function TicketDetailPage() {
             </div>
           )}
 
-          {/* Metadata card */}
           <div
             className="rounded-xl p-4 flex flex-col gap-3"
             style={{

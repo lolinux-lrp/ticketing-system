@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 
-// ─── Icons ────────────────────────────────────────────────────────
 function IconDashboard() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -34,7 +33,6 @@ function IconSignOut() {
   );
 }
 
-// ─── Avatar initials helper ────────────────────────────────────────
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -50,7 +48,6 @@ const AVATAR_COLORS: Record<string, string> = {
   CUSTOMER: "#10b981",
 };
 
-// ─── NavItem ──────────────────────────────────────────────────────
 interface NavItemProps {
   href: string;
   label: string;
@@ -66,7 +63,6 @@ function NavItem({ href, label, icon, isActive }: NavItemProps) {
   );
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────
 export function Sidebar() {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -83,7 +79,6 @@ export function Sidebar() {
 
   return (
     <nav className="flex flex-col h-full" style={{ userSelect: "none" }}>
-      {/* Brand */}
       <div
         className="flex items-center gap-2.5 px-4 py-3 shrink-0"
         style={{ height: "var(--topbar-height)", borderBottom: "1px solid var(--sidebar-border)" }}
@@ -106,7 +101,6 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Navigation items */}
       <div className="flex flex-col gap-0.5 p-2 flex-1">
         <p
           className="px-2 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest"
@@ -146,13 +140,11 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* User footer */}
       <div
         className="p-3 shrink-0"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}
       >
         <div className="flex items-center gap-2.5 p-2 rounded-lg" style={{ background: "var(--surface-2)" }}>
-          {/* Avatar */}
           <div
             className="avatar w-7 h-7 text-white shrink-0"
             style={{ background: avatarBg, fontSize: "10px" }}
@@ -160,7 +152,6 @@ export function Sidebar() {
             {initials}
           </div>
 
-          {/* Info */}
           <div className="flex-1 min-w-0">
             <p
               className="text-xs font-semibold truncate leading-tight"
@@ -176,7 +167,6 @@ export function Sidebar() {
             </p>
           </div>
 
-          {/* Sign out */}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             title="Sign out"
@@ -195,7 +185,6 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Role badge */}
         <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
           {role}
         </p>
@@ -204,5 +193,4 @@ export function Sidebar() {
   );
 }
 
-// Keep backward-compat export for any lingering imports
 export { Sidebar as Navigation };

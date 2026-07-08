@@ -27,7 +27,6 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -35,7 +34,6 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
     return () => window.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
 
-  // Reset on open
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
@@ -72,21 +70,18 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
 
   return createPortal(
     <>
-      {/* Overlay */}
       <div
         className="slide-over-overlay"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Panel */}
       <div
         className="slide-over-panel flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-ticket-heading"
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b shrink-0"
           style={{ borderColor: "var(--border)" }}
@@ -116,9 +111,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 p-6 flex-1">
-          {/* Title */}
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="ct-title"
@@ -140,7 +133,6 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
             />
           </div>
 
-          {/* Description */}
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="ct-description"
@@ -162,7 +154,6 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
             />
           </div>
 
-          {/* Priority */}
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="ct-priority"
@@ -190,7 +181,6 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
             </div>
           </div>
 
-          {/* Error / success */}
           {formError && (
             <div
               className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm"
@@ -210,7 +200,6 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
             </div>
           )}
 
-          {/* Spacer + submit */}
           <div className="mt-auto pt-4 border-t flex gap-3" style={{ borderColor: "var(--border)" }}>
             <button
               type="button"
@@ -245,5 +234,4 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
   );
 }
 
-// Legacy default export kept for backward compat (dashboard/page used named import)
 export { CreateTicketSlideOver as CreateTicketForm };

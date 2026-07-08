@@ -26,7 +26,6 @@ interface TicketFiltersProps {
   showMineToggle: boolean;
 }
 
-// Generic pill button for filter chips
 function FilterChip({
   label,
   active,
@@ -58,14 +57,12 @@ export function TicketFilters({
 }: TicketFiltersProps) {
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
 
-  // Sync external changes (clear, URL nav)
   const [syncedSearch, setSyncedSearch] = useState(filters.search);
   if (filters.search !== syncedSearch) {
     setSyncedSearch(filters.search);
     setSearchInput(filters.search ?? "");
   }
 
-  // Debounced search
   useEffect(() => {
     const t = setTimeout(() => {
       if (searchInput !== (filters.search ?? "")) {
@@ -88,7 +85,6 @@ export function TicketFilters({
         borderColor: "var(--border)",
       }}
     >
-      {/* Search */}
       <div className="relative flex items-center">
         <svg
           className="absolute left-2.5 pointer-events-none"
@@ -118,10 +114,8 @@ export function TicketFilters({
         />
       </div>
 
-      {/* Separator */}
       <div className="w-px h-4 mx-0.5" style={{ background: "var(--border)" }} />
 
-      {/* Status filter */}
       <div className="flex items-center gap-1 flex-wrap">
         <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Status:</span>
         {STATUS_OPTIONS.map((s) => (
@@ -140,10 +134,8 @@ export function TicketFilters({
         ))}
       </div>
 
-      {/* Separator */}
       <div className="w-px h-4 mx-0.5" style={{ background: "var(--border)" }} />
 
-      {/* Priority filter */}
       <div className="flex items-center gap-1 flex-wrap">
         <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Priority:</span>
         {PRIORITY_OPTIONS.map((p) => (
@@ -162,7 +154,6 @@ export function TicketFilters({
         ))}
       </div>
 
-      {/* Mine toggle */}
       {showMineToggle && (
         <>
           <div className="w-px h-4 mx-0.5" style={{ background: "var(--border)" }} />
@@ -184,7 +175,6 @@ export function TicketFilters({
         </>
       )}
 
-      {/* Sort */}
       <div className="ml-auto flex items-center gap-2">
         <select
           value={filters.sortBy ?? "createdAt"}
@@ -222,7 +212,6 @@ export function TicketFilters({
           )}
         </button>
 
-        {/* Clear */}
         {hasActive && (
           <button
             type="button"

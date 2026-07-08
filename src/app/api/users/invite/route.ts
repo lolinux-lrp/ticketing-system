@@ -48,8 +48,6 @@ export async function POST(req: NextRequest) {
         password: null, // Invited users authenticate via magic link — no password set
       },
     });
-
-    // Send Invite Email via Ethereal (Development)
     const transport = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),

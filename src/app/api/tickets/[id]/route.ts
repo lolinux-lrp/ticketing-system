@@ -5,7 +5,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 interface udParams {
-  //update and delete params
   params: Promise<{ id: string }>;
 }
 
