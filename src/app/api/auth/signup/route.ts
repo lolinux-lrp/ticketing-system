@@ -8,38 +8,46 @@ export async function POST(req: Request) {
         const body = await req.json();
 
         const result = signupSchema.safeParse(body);
-
         if (!result.success) {
-            const firstError = result.error.issues[0];
             return NextResponse.json(
-                { error: firstError.message },
+                { error: result.error.issues[0].message },
                 { status: 400 }
             );
         }
 
         const { name, email, password } = result.data;
-
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) {
-            return NextResponse.json(
-                { error: "An account with this email already exists." },
-                { status: 409 }
-            );
-        }
-
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+
+        if (existingUser) {
+            if (existingUser.password) {
+                // Already has a password — fully registered
+                return NextResponse.json(
+                    { error: "An account with this email already exists." },
+                    { status: 409 }
+                );
+            }
+
+            // Invited user (exists in DB but no password yet) — set their password
+            // and update name, but KEEP their assigned role (AGENT/ADMIN/CUSTOMER)
+            const updated = await prisma.user.update({
+                where: { email },
+                data: { name, password: hashedPassword },
+            });
+
+            const { password: _, ...userWithoutPassword } = updated;
+            return NextResponse.json({ user: userWithoutPassword }, { status: 200 });
+        }
+
+        // Brand new user
         const user = await prisma.user.create({
-            data: {
-                name,
-                email,
-                password: hashedPassword,
-            },
+            data: { name, email, password: hashedPassword },
         });
 
         const { password: _, ...userWithoutPassword } = user;
-
         return NextResponse.json({ user: userWithoutPassword }, { status: 201 });
+
     } catch (error) {
         console.error("Signup error:", error);
         return NextResponse.json(

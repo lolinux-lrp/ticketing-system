@@ -37,8 +37,9 @@ export default function AdminPage() {
     e.preventDefault();
     setMessage(null);
     try {
-      await inviteUser({ name, email, role }).unwrap();
-      setMessage({ type: "success", text: "Invite sent! The user will receive an email with login instructions." });
+      const res = await inviteUser({ name, email, role }).unwrap();
+      const text = (res as any).message ?? "Invite sent! The user will receive an email with login instructions.";
+      setMessage({ type: "success", text });
       setName(""); setEmail(""); setRole("AGENT");
     } catch (err: any) {
       setMessage({ type: "error", text: err?.data?.error || "Failed to invite user. Please try again." });
