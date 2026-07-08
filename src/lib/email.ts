@@ -72,3 +72,51 @@ export async function sendInviteEmail({ name, email, role, hostUrl, signupUrl, i
     console.log("Invite email preview URL: %s", previewUrl);
   }
 }
+
+interface TicketAssignmentEmailOptions {
+  assigneeName: string;
+  assigneeEmail: string;
+  ticketTitle: string;
+  ticketId: string;
+  assignedByName: string;
+  hostUrl: string;
+}
+
+export async function sendTicketAssignmentEmail({
+  assigneeName,
+  assigneeEmail,
+  ticketTitle,
+  ticketId,
+  assignedByName,
+  hostUrl,
+}: TicketAssignmentEmailOptions) {
+  const transport = createTransport();
+  const ticketUrl = `${hostUrl}/tickets/${ticketId}`;
+  const from = process.env.GOOGLE_EMAIL
+    ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>`
+    : `"TicketFlow" <noreply@ticketing-system.local>`;
+
+  const info = await transport.sendMail({
+    to: assigneeEmail,
+    from,
+    subject: `You've been assigned a ticket: ${ticketTitle}`,
+    text: `Hi ${assigneeName},\n\nA ticket has been assigned to you by ${assignedByName}.\n\nTicket: ${ticketTitle}\nView it here: ${ticketUrl}\n\n— TicketFlow`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
+        <h2 style="color: #6366f1;">New Ticket Assigned</h2>
+        <p>Hi <strong>${assigneeName}</strong>,</p>
+        <p><strong>${assignedByName}</strong> has assigned a ticket to you:</p>
+        <div style="background:#f8f8f8;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin:16px 0;">
+          <strong>${ticketTitle}</strong>
+        </div>
+        <a href="${ticketUrl}" style="display:inline-block;background:#6366f1;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View Ticket</a>
+        <p style="margin-top:24px;color:#888;font-size:12px;">— TicketFlow</p>
+      </div>
+    `,
+  });
+
+  const previewUrl = nodemailer.getTestMessageUrl(info);
+  if (previewUrl) {
+    console.log("Assignment email preview URL: %s", previewUrl);
+  }
+}

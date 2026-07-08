@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateTicketSchema } from "@/lib/validations/tickets";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { sendTicketAssignmentEmail } from "@/lib/email";
 
 interface udParams {
   params: Promise<{ id: string }>;
@@ -97,10 +98,31 @@ export async function PATCH(req: NextRequest, { params }: udParams) {
       where: { id },
       data: validation.data,
       include: {
-        assignedTo: { select: { id: true, name: true, role: true } },
+        assignedTo: { select: { id: true, name: true, email: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },
       },
     });
+
+    // Send assignment email if the assignee changed to a real user
+    const assigneeChanged =
+      validation.data.assignedToId !== undefined &&
+      validation.data.assignedToId !== null &&
+      validation.data.assignedToId !== existingTicket.assignedToId;
+
+    if (assigneeChanged && updateTicket.assignedTo?.email) {
+      const hostUrl = req.headers.get("origin") ||
+        `${req.headers.get("x-forwarded-proto") ?? "http"}://${req.headers.get("host")}`;
+
+      // Fire-and-forget — don't block the response
+      sendTicketAssignmentEmail({
+        assigneeName: updateTicket.assignedTo.name ?? updateTicket.assignedTo.email,
+        assigneeEmail: updateTicket.assignedTo.email,
+        ticketTitle: updateTicket.title,
+        ticketId: updateTicket.id,
+        assignedByName: session.user.name ?? session.user.email ?? "Someone",
+        hostUrl,
+      }).catch((err) => console.error("Failed to send assignment email:", err));
+    }
 
     return NextResponse.json(updateTicket, { status: 200 });
   } catch (e) {

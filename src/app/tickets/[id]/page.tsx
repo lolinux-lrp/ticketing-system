@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -33,7 +34,7 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
 export default function TicketDetailPage() {
   const params = useParams();
   const ticketId = params.id as string;
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const { data, isLoading, isError } = useGetTicketQuery(ticketId);
   const { data: agents } = useGetAgentsQuery(undefined, {
     skip: session?.user?.role !== "ADMIN",
@@ -43,6 +44,15 @@ export default function TicketDetailPage() {
   const isAdmin = session?.user?.role === "ADMIN";
   const isAgent = session?.user?.role === "AGENT";
   const canManage = isAdmin || isAgent;
+
+  const router = useRouter();
+
+  // Redirect unauthenticated users to login, preserving the current URL as callbackUrl
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+    }
+  }, [status, router]);
 
   if (isLoading) {
     return (
@@ -66,8 +76,28 @@ export default function TicketDetailPage() {
 
   if (isError || !data) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Failed to load ticket.</p>
+      <div className="p-8 max-w-md mx-auto text-center">
+        <div
+          className="rounded-xl p-8"
+          style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+        >
+          <svg className="mx-auto mb-4" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Ticket not found</p>
+          <p className="text-xs mb-6" style={{ color: "var(--text-muted)" }}>
+            This ticket may have been deleted or you don&apos;t have access to it.
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white"
+            style={{ background: "var(--brand)" }}
+          >
+            Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
