@@ -49,15 +49,23 @@ export async function POST(req: Request) {
 
             // Invited user (exists in DB but no password yet) — set their password
             // and update name, but KEEP their assigned role (AGENT/ADMIN/CUSTOMER)
-            const updated = await prisma.user.update({
-                where: { email },
-                data: { name, password: hashedPassword },
-            });
-
-            // Consume the invite token
-            await prisma.verificationToken.delete({
-                where: { identifier_token: { identifier: email, token } },
-            });
+            let updated;
+            try {
+                [updated] = await prisma.$transaction([
+                    prisma.user.update({
+                        where: { email },
+                        data: { name, password: hashedPassword },
+                    }),
+                    prisma.verificationToken.delete({
+                        where: { identifier_token: { identifier: email, token } },
+                    }),
+                ]);
+            } catch {
+                return NextResponse.json(
+                    { error: "Invalid or expired invite token." },
+                    { status: 403 }
+                );
+            }
 
             const { password: _, ...userWithoutPassword } = updated;
             return NextResponse.json({ user: userWithoutPassword }, { status: 200 });
