@@ -123,11 +123,12 @@ export function Sidebar() {
           icon={<IconDashboard />}
           isActive={pathname === "/dashboard"}
         />
+
         <NavItem
-          href="/dashboard"
-          label="All Tickets"
+          href="/schedule"
+          label="Schedule"
           icon={<IconTickets />}
-          isActive={false}
+          isActive={pathname === "/schedule"}
         />
 
         {role === "ADMIN" && (

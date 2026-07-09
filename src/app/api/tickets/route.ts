@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ticket: newTicket }, { status: 201 });
   } catch (error) {
-    console.log("Error creating Ticket:", error);
+    console.error("Error creating Ticket:", error);
     return NextResponse.json(
       { error: "Failed to create ticket" },
       { status: 500 },
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: tickets });
   } catch (error) {
-    console.log("Error fetching tickets: ", error);
+    console.error("Error fetching tickets: ", error);
     return NextResponse.json(
       { error: "Failed to fetch tickets" },
       { status: 500 },

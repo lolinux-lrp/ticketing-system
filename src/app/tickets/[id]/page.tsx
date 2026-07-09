@@ -13,6 +13,7 @@ import { TicketCommentsSection } from "@/components/comments/TicketCommentsSecti
 import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
 import { StatusBadge } from "@/components/tickets/StatusBadge";
 import { PriorityBadge } from "@/components/tickets/PriorityBadge";
+import { TicketMeetingsCard } from "@/components/tickets/TicketMeetingsCard";
 import type { Status, Priority } from "@/types";
 
 const statusOptions: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -316,6 +317,13 @@ export default function TicketDetailPage() {
               })}
             />
           </div>
+
+          <TicketMeetingsCard 
+            ticketId={ticketId} 
+            ticketTitle={ticket.title}
+            customerUserId={ticket.createdById}
+            agentUserId={ticket.assignedToId}
+          />
         </div>
       </div>
     </div>

@@ -26,35 +26,44 @@ enum Priority {
   URGENT
 }
 
+enum AttendeeStatus {
+  ACCEPTED
+  DECLINED
+  PENDING
+  CANCELLED
+}
+
 model User {
-  id               String    @id @default(uuid())
-  name             String?
-  email            String?   @unique
-  emailVerified    DateTime?
-  image            String?
-  password         String?
-  role             Role      @default(CUSTOMER)
-  createdTickets   Ticket[]  @relation("CreatedTickets")
-  assignedTickets  Ticket[]  @relation("AssignedTickets")
-  comments         Comment[]
-  createdAt        DateTime  @default(now())
-  accounts         Account[]
-  sessions         Session[]
+  id                 String             @id @default(uuid())
+  name               String?
+  email              String?            @unique
+  emailVerified      DateTime?
+  image              String?
+  password           String?
+  role               Role               @default(CUSTOMER)
+  createdTickets     Ticket[]           @relation("CreatedTickets")
+  assignedTickets    Ticket[]           @relation("AssignedTickets")
+  comments           Comment[]
+  meetingsCreated    Meeting[]          @relation("MeetingHost")
+  meetingAttendances MeetingAttendee[]
+  createdAt          DateTime           @default(now())
+  accounts           Account[]
+  sessions           Session[]
 }
 
 model Account {
-  id                 String  @id @default(uuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?  @db.Text
-  access_token       String?  @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?  @db.Text
-  session_state      String?
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -78,19 +87,20 @@ model VerificationToken {
 }
 
 model Ticket {
-  id           String    @id @default(uuid())
+  id           String                     @id @default(uuid())
   title        String
   description  String
-  status       Status    @default(OPEN)
-  priority     Priority  @default(MEDIUM)
-  createdBy    User      @relation("CreatedTickets", fields: [createdById], references: [id])
+  status       Status                     @default(OPEN)
+  priority     Priority                   @default(MEDIUM)
+  createdBy    User                       @relation("CreatedTickets", fields: [createdById], references: [id])
   createdById  String
-  assignedTo   User?     @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedTo   User?                      @relation("AssignedTickets", fields: [assignedToId], references: [id])
   assignedToId String?
   comments     Comment[]
+  meetings     Meeting[]
   workDone     String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
   searchVector Unsupported("tsvector")?
 
   @@index([createdById])
@@ -109,4 +119,37 @@ model Comment {
 
   @@index([ticketId])
   @@index([authorId])
+}
+
+model Meeting {
+  id                    String            @id @default(cuid())
+  title                 String
+  description           String?
+  startTime             DateTime
+  endTime               DateTime
+  meetingUrl            String
+  externalGoogleEventId String?
+  ticketId              String?
+  ticket                Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdById           String
+  createdBy             User              @relation("MeetingHost", fields: [createdById], references: [id])
+  attendees             MeetingAttendee[]
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([ticketId])
+  @@index([createdById])
+}
+
+model MeetingAttendee {
+  id        String         @id @default(cuid())
+  meetingId String
+  meeting   Meeting        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    AttendeeStatus @default(ACCEPTED)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@index([userId])
 }

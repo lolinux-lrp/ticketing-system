@@ -1,25 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") || "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get("token");
-    const e = params.get("email");
-    if (t) setToken(t);
-    if (e) setEmail(e);
-  }, []);
+  
+  const token = searchParams.get("token") || "";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -162,5 +157,13 @@ export default function SignupPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center p-4">Loading...</div>}>
+      <SignupForm />
+    </Suspense>
   );
 }
