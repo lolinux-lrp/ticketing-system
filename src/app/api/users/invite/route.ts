@@ -34,7 +34,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { name, email, role } = result.data;
-    const hostUrl = req.nextUrl.origin;
+    const APP_BASE_URL = process.env.APP_BASE_URL;
+    if (!APP_BASE_URL) {
+      throw new Error("Missing required environment variable: APP_BASE_URL");
+    }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
@@ -65,7 +68,7 @@ export async function POST(req: NextRequest) {
       });
 
       try {
-        await sendInviteEmail({ name: updated.name ?? name, email, role, hostUrl, isUpgrade: true });
+        await sendInviteEmail({ name: updated.name ?? name, email, role, isUpgrade: true });
       } catch (emailError) {
         // Rollback role upgrade if email fails to send
         await prisma.user.update({
@@ -94,7 +97,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Signup URL embeds token so only the recipient can claim the account
-    const signupUrl = `${hostUrl}/signup?token=${token}&email=${encodeURIComponent(email)}`;
+    const signupUrl = `${APP_BASE_URL}/signup?token=${token}&email=${encodeURIComponent(email)}`;
     
     try {
       await sendInviteEmail({ name, email, role, signupUrl, isUpgrade: false });

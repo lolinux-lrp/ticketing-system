@@ -1,5 +1,25 @@
 import nodemailer from "nodemailer";
 
+const APP_BASE_URL = process.env.APP_BASE_URL;
+if (!APP_BASE_URL) {
+  throw new Error("Missing required environment variable: APP_BASE_URL");
+}
+
+const DEFAULT_FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL;
+if (!DEFAULT_FROM_EMAIL) {
+  throw new Error("Missing required environment variable: DEFAULT_FROM_EMAIL");
+}
+
+interface EmailConfig {
+  brandColor: string;
+  backgroundColor: string;
+}
+
+const EMAIL_CONFIG: EmailConfig = {
+  brandColor: "#6366f1",
+  backgroundColor: "#f8f8f8",
+};
+
 function createTransport() {
   if (process.env.GOOGLE_EMAIL && process.env.GOOGLE_REFRESH_TOKEN) {
     return nodemailer.createTransport({
@@ -28,15 +48,14 @@ interface InviteEmailOptions {
   name: string;
   email: string;
   role: "AGENT" | "ADMIN";
-  hostUrl?: string; // Optional since we might pass signupUrl instead
   signupUrl?: string;
   isUpgrade: boolean;
 }
 
-export async function sendInviteEmail({ name, email, role, hostUrl, signupUrl, isUpgrade }: InviteEmailOptions) {
+export async function sendInviteEmail({ name, email, role, signupUrl, isUpgrade }: InviteEmailOptions) {
   const transport = createTransport();
-  const loginUrl = `${hostUrl || new URL(signupUrl!).origin}/login`;
-  const finalSignupUrl = signupUrl || `${hostUrl}/signup`;
+  const loginUrl = `${APP_BASE_URL}/login`;
+  const finalSignupUrl = signupUrl || `${APP_BASE_URL}/signup`;
 
   const subject = isUpgrade
     ? `Your role has been updated to ${role} on TicketFlow`
@@ -61,7 +80,7 @@ export async function sendInviteEmail({ name, email, role, hostUrl, signupUrl, i
 
   const info = await transport.sendMail({
     to: email,
-    from: process.env.GOOGLE_EMAIL ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>` : `"TicketFlow" <noreply@ticketing-system.local>`,
+    from: process.env.GOOGLE_EMAIL ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>` : `"TicketFlow" <${DEFAULT_FROM_EMAIL}>`,
     subject,
     text: textBody,
     html: htmlBody,
@@ -79,7 +98,6 @@ interface TicketAssignmentEmailOptions {
   ticketTitle: string;
   ticketId: string;
   assignedByName: string;
-  hostUrl: string;
 }
 
 export async function sendTicketAssignmentEmail({
@@ -88,13 +106,12 @@ export async function sendTicketAssignmentEmail({
   ticketTitle,
   ticketId,
   assignedByName,
-  hostUrl,
 }: TicketAssignmentEmailOptions) {
   const transport = createTransport();
-  const ticketUrl = `${hostUrl}/tickets/${ticketId}`;
+  const ticketUrl = `${APP_BASE_URL}/tickets/${ticketId}`;
   const from = process.env.GOOGLE_EMAIL
     ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>`
-    : `"TicketFlow" <noreply@ticketing-system.local>`;
+    : `"TicketFlow" <${DEFAULT_FROM_EMAIL}>`;
 
   const info = await transport.sendMail({
     to: assigneeEmail,
@@ -103,13 +120,13 @@ export async function sendTicketAssignmentEmail({
     text: `Hi ${assigneeName},\n\nA ticket has been assigned to you by ${assignedByName}.\n\nTicket: ${ticketTitle}\nView it here: ${ticketUrl}\n\n— TicketFlow`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
-        <h2 style="color: #6366f1;">New Ticket Assigned</h2>
+        <h2 style="color: ${EMAIL_CONFIG.brandColor};">New Ticket Assigned</h2>
         <p>Hi <strong>${assigneeName}</strong>,</p>
         <p><strong>${assignedByName}</strong> has assigned a ticket to you:</p>
-        <div style="background:#f8f8f8;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin:16px 0;">
+        <div style="background:${EMAIL_CONFIG.backgroundColor};border-left:4px solid ${EMAIL_CONFIG.brandColor};padding:12px 16px;border-radius:4px;margin:16px 0;">
           <strong>${ticketTitle}</strong>
         </div>
-        <a href="${ticketUrl}" style="display:inline-block;background:#6366f1;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View Ticket</a>
+        <a href="${ticketUrl}" style="display:inline-block;background:${EMAIL_CONFIG.brandColor};color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View Ticket</a>
         <p style="margin-top:24px;color:#888;font-size:12px;">— TicketFlow</p>
       </div>
     `,

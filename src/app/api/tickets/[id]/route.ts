@@ -108,9 +108,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       validation.data.assignedToId !== existingTicket.assignedToId;
 
     if (assigneeChanged && updateTicket.assignedTo?.email) {
-      const hostUrl = req.headers.get("origin") ||
-        `${req.headers.get("x-forwarded-proto") ?? "http"}://${req.headers.get("host")}`;
-
       // Fire-and-forget — don't block the response
       sendTicketAssignmentEmail({
         assigneeName: updateTicket.assignedTo.name ?? updateTicket.assignedTo.email,
@@ -118,7 +115,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         ticketTitle: updateTicket.title,
         ticketId: updateTicket.id,
         assignedByName: session.user.name ?? session.user.email ?? "Someone",
-        hostUrl,
       }).catch((err) => console.error("Failed to send assignment email:", err));
     }
 
