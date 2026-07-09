@@ -2,12 +2,10 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { can } from "@/lib/auth/policy";
+import { RouteParams } from "@/types/api";
 
-interface udParams {
-  params: Promise<{ id: string }>;
-}
-
-export async function POST(req: NextRequest, { params }: udParams) {
+export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -33,7 +31,7 @@ export async function POST(req: NextRequest, { params }: udParams) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    if (session.user.role === "CUSTOMER" && ticket.createdById !== session.user.id) {
+    if (!can(session.user, "comment:create", ticket)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

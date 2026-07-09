@@ -4,12 +4,17 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createTicketSchema, getTicketSchema } from "@/lib/validations/tickets";
+import { can } from "@/lib/auth/policy";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!can(session.user, "ticket:create")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -63,7 +68,7 @@ export async function GET(req: NextRequest) {
       validation.data;
 
     if (search) {
-      const isCustomer = session.user.role === "CUSTOMER";
+      const isCustomer = !can(session.user, "ticket:view");
 
       const tickets = await prisma.ticket.findMany({
         where: {
@@ -93,7 +98,7 @@ export async function GET(req: NextRequest) {
       createdById,
     };
 
-    if (session.user.role === "CUSTOMER") {
+    if (!can(session.user, "ticket:view")) {
       where.createdById = session.user.id;
     }
 

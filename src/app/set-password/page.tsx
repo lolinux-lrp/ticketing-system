@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -14,15 +14,9 @@ function SetPasswordForm() {
 
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [error, setError] = useState("");
+    const [error, setError] = useState(!email || !token ? "Invalid or missing link parameters." : "");
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (!email || !token) {
-            setError("Invalid or missing link parameters.");
-        }
-    }, [email, token]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -61,7 +55,7 @@ function SetPasswordForm() {
             setTimeout(() => {
                 router.push("/login");
             }, 2000);
-        } catch (err) {
+        } catch {
             setError("Something went wrong. Please try again.");
             setLoading(false);
         }

@@ -4,12 +4,10 @@ import { updateTicketSchema } from "@/lib/validations/tickets";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { sendTicketAssignmentEmail } from "@/lib/email";
+import { RouteParams } from "@/types/api";
+import { can } from "@/lib/auth/policy";
 
-interface udParams {
-  params: Promise<{ id: string }>;
-}
-
-export async function GET(req: NextRequest, { params }: udParams) {
+export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -30,7 +28,7 @@ export async function GET(req: NextRequest, { params }: udParams) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    if (session.user.role === "CUSTOMER" && ticket.createdById !== session.user.id) {
+    if (!can(session.user, "ticket:view", ticket)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -44,7 +42,7 @@ export async function GET(req: NextRequest, { params }: udParams) {
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: udParams) {
+export async function PATCH(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -70,27 +68,27 @@ export async function PATCH(req: NextRequest, { params }: udParams) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    if (session.user.role === "CUSTOMER") {
-      if (existingTicket.createdById !== session.user.id) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      if (validation.data.status || validation.data.priority || validation.data.assignedToId !== undefined || validation.data.workDone !== undefined) {
-        return NextResponse.json({ error: "Forbidden: Cannot update status, priority, assignee, or work progress" }, { status: 403 });
-      }
+    const data = validation.data;
+
+    if (!can(session.user, "ticket:view", existingTicket)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (session.user.role === "AGENT") {
-      if (validation.data.assignedToId !== undefined) {
-        if (validation.data.assignedToId !== null && validation.data.assignedToId !== session.user.id) {
-          return NextResponse.json({ error: "Forbidden: Agents can only assign to themselves" }, { status: 403 });
-        }
-      }
-    }
-
-    // Anyone modifying title or description MUST be the creator
-    if (validation.data.title !== undefined || validation.data.description !== undefined) {
-      if (existingTicket.createdById !== session.user.id) {
+    if (data.title !== undefined || data.description !== undefined) {
+      if (!can(session.user, "ticket:update_content", existingTicket)) {
         return NextResponse.json({ error: "Forbidden: Only the ticket creator can edit the title and description" }, { status: 403 });
+      }
+    }
+
+    if (data.status !== undefined || data.priority !== undefined || data.workDone !== undefined) {
+      if (!can(session.user, "ticket:update_workflow", existingTicket)) {
+        return NextResponse.json({ error: "Forbidden: Cannot update status, priority, or work progress" }, { status: 403 });
+      }
+    }
+
+    if (data.assignedToId !== undefined) {
+      if (!can(session.user, "ticket:assign", { ...existingTicket, assignedToId: data.assignedToId })) {
+        return NextResponse.json({ error: "Forbidden: Insufficient permissions to assign this ticket" }, { status: 403 });
       }
     }
 
@@ -134,14 +132,14 @@ export async function PATCH(req: NextRequest, { params }: udParams) {
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: udParams) {
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    if (session.user.role !== "ADMIN") {
+    if (!can(session.user, "ticket:delete")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

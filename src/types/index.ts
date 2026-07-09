@@ -1,6 +1,6 @@
-export type Status = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
-export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-export type Role = "CUSTOMER" | "AGENT" | "ADMIN";
+import { Status, Priority, Role, Ticket as PrismaTicket, Comment as PrismaComment } from "@prisma/client";
+
+export { Status, Priority, Role };
 
 export interface TicketUser {
   id: string;
@@ -8,19 +8,11 @@ export interface TicketUser {
   role: Role;
 }
 
-export interface Ticket {
-  id: string;
-  title: string;
-  description: string;
-  status: Status;
-  priority: Priority;
-  createdById: string;
-  assignedToId: string | null;
+export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt"> {
   createdAt: string;
   updatedAt: string;
   createdBy: TicketUser;
   assignedTo: TicketUser | null;
-  workDone: string | null;
 }
 
 export interface GetTicketsParams {
@@ -53,17 +45,10 @@ export interface DeleteTicketResponse {
   data: Ticket;
 }
 
-export interface Comment {
-  id: string;
-  content: string;
-  ticketId: string;
-  authorId: string;
+export interface Comment extends Omit<PrismaComment, "createdAt" | "updatedAt"> {
   createdAt: string;
-  author: {
-    id: string;
-    name: string;
-    role: string;
-  }
+  updatedAt: string;
+  author: TicketUser;
 }
 
 export interface CreateCommentPayload {

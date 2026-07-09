@@ -67,6 +67,7 @@ export async function POST(req: Request) {
                 );
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { password: _, ...userWithoutPassword } = updated;
             return NextResponse.json({ user: userWithoutPassword }, { status: 200 });
         }
@@ -76,6 +77,7 @@ export async function POST(req: Request) {
             data: { name, email, password: hashedPassword },
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password: _, ...userWithoutPassword } = user;
         return NextResponse.json({ user: userWithoutPassword }, { status: 201 });
 

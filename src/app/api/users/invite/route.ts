@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import { sendInviteEmail } from "@/lib/email";
 import { randomBytes } from "crypto";
+import { can } from "@/lib/auth/policy";
 
 const inviteSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user || session.user.role !== "ADMIN") {
+    if (!session || !session.user || !can(session.user, "user:invite")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

@@ -22,7 +22,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!session || (session.user as any).role !== "ADMIN") {
+  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
     return (
       <div
         className="m-8 p-4 rounded-xl text-sm font-medium"
@@ -38,11 +38,11 @@ export default function AdminPage() {
     setMessage(null);
     try {
       const res = await inviteUser({ name, email, role }).unwrap();
-      const text = (res as any).message ?? "Invite sent! The user will receive an email with login instructions.";
+      const text = (res as { message?: string }).message ?? "Invite sent! The user will receive an email with login instructions.";
       setMessage({ type: "success", text });
       setName(""); setEmail(""); setRole("AGENT");
-    } catch (err: any) {
-      setMessage({ type: "error", text: err?.data?.error || "Failed to invite user. Please try again." });
+    } catch (err) {
+      setMessage({ type: "error", text: (err as { data?: { error?: string } })?.data?.error || "Failed to invite user. Please try again." });
     }
   }
 

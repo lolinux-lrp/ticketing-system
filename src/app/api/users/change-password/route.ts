@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     }
 }
 
-export async function GET(req: Request) {
+export async function GET() {
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user?.email) {
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
         });
 
         return Response.json({ hasPassword: !!user?.password });
-    } catch (error) {
+    } catch {
         return Response.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

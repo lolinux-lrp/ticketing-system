@@ -7,6 +7,7 @@ import {
 } from "@/lib/validations/comments";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { can } from "@/lib/auth/policy";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    if (session.user.role === "CUSTOMER" && ticket.createdById !== session.user.id) {
+    if (!can(session.user, "comment:create", ticket)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    if (session.user.role === "CUSTOMER" && ticket.createdById !== session.user.id) {
+    if (!can(session.user, "ticket:view", ticket)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -135,7 +136,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Comment not found" }, { status: 404 });
     }
 
-    if (session.user.role !== "ADMIN" && session.user.id !== comment.authorId) {
+    if (!can(session.user, "comment:delete", comment)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
