@@ -6,6 +6,7 @@ export interface TicketUser {
   id: string;
   name: string;
   role: Role;
+  email?: string;
 }
 
 export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "workDone" | "searchVector"> {

@@ -4,7 +4,7 @@ import type { CreateCommentPayload, Comment } from "@/types";
 export const commentsApi = createApi({
   reducerPath: "commentsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api" }),
-  tagTypes: ["Comment"],
+  tagTypes: ["Comment", "Ticket"],
   endpoints: (builder) => ({
     getComments: builder.query<Comment[], string>({
       query: (ticketId) => `/comments?ticketId=${ticketId}`,
@@ -24,17 +24,21 @@ export const commentsApi = createApi({
         body: payload,
       }),
 
-      invalidatesTags: [{ type: "Comment", id: "LIST" }],
+      invalidatesTags: (result, error, arg) => [
+        { type: "Comment", id: "LIST" },
+        { type: "Ticket", id: arg.ticketId },
+      ],
     }),
 
-    deleteComment: builder.mutation<Comment, string>({
-      query: (commentId) => ({
+    deleteComment: builder.mutation<Comment, { commentId: string; ticketId: string }>({
+      query: ({ commentId }) => ({
         url: `/comments?id=${commentId}`,
         method: "DELETE",
       }),
-      invalidatesTags: (result, error, id) => [
-        { type: "Comment", id },
+      invalidatesTags: (result, error, arg) => [
+        { type: "Comment", id: arg.commentId },
         { type: "Comment", id: "LIST" },
+        { type: "Ticket", id: arg.ticketId },
       ],
     }),
   }),

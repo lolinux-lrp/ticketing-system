@@ -7,8 +7,8 @@ import Link from "next/link";
 import {
   useGetTicketQuery,
   useUpdateTicketMutation,
-  useGetAgentsQuery,
 } from "@/store/ticketsApi";
+import { useGetAgentsQuery } from "@/store/usersApi";
 import { TicketCommentsSection } from "@/components/comments/TicketCommentsSection";
 import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
 import { StatusBadge } from "@/components/tickets/StatusBadge";
@@ -207,16 +207,23 @@ export default function TicketDetailPage() {
                 </label>
                 <select
                   value={ticket.status}
+                  disabled={!ticket.assignedToId}
+                  title={!ticket.assignedToId ? "Assign ticket to update status" : undefined}
                   onChange={(e) =>
                     updateTicket({ id: ticketId, body: { status: e.target.value as Status } })
                   }
-                  className="input-base cursor-pointer"
+                  className="input-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ fontSize: "13px", padding: "7px 10px" }}
                 >
                   {statusOptions.map((s) => (
                     <option key={s} value={s}>{s.replace("_", " ")}</option>
                   ))}
                 </select>
+                {!ticket.assignedToId && (
+                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    Assign ticket to update status
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">

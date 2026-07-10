@@ -68,10 +68,6 @@ export const ticketsApi = createApi({
       query: (id) => `tickets/${id}`,
       providesTags: (result, error, id) => [{ type: "Ticket", id }],
     }),
-    getAgents: builder.query<TicketUser[], void>({
-      query: () => "users/agents",
-      transformResponse: (response: { data: TicketUser[] }) => response.data,
-    }),
   }),
 });
 
@@ -81,5 +77,4 @@ export const {
   useCreateTicketMutation,
   useUpdateTicketMutation,
   useDeleteTicketMutation,
-  useGetAgentsQuery,
 } = ticketsApi;

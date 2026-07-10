@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { can } from "@/lib/auth/policy";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -18,6 +20,7 @@ export async function GET() {
       select: {
         id: true,
         name: true,
+        email: true,
         role: true,
       },
       orderBy: {

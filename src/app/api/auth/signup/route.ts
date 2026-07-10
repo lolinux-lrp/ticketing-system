@@ -60,10 +60,11 @@ export async function POST(req: Request) {
                         where: { identifier_token: { identifier: email, token } },
                     }),
                 ]);
-            } catch {
+            } catch (error) {
+                console.error("Signup transaction error:", error);
                 return NextResponse.json(
-                    { error: "Invalid or expired invite token." },
-                    { status: 403 }
+                    { error: "Failed to process invite token. It may be invalid or expired." },
+                    { status: 400 }
                 );
             }
 

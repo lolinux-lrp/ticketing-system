@@ -37,7 +37,7 @@ export const TicketCommentsSection: React.FC<TicketCommentsSectionProps> = ({ ti
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      await deleteComment(commentId).unwrap();
+      await deleteComment({ commentId, ticketId }).unwrap();
       
     } catch (error) {
       console.error("Failed to delete comment:", error);
