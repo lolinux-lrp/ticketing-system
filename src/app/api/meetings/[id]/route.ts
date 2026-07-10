@@ -3,12 +3,19 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateMeetingSchema } from "@/lib/validations/meetings";
-import { sendMeetingInvitationEmail } from "@/lib/email";
+import { 
+  sendMeetingInvitationEmail,
+  sendMeetingCancelledEmail,
+  sendAttendeeDeclinedEmail
+} from "@/lib/email";
+import { deleteGoogleMeetRoom } from "@/lib/calendar/googleMeet";
 import { RouteParams } from "@/types/api";
 import type {
   MeetingEmailPayload,
   MeetingWithAttendees,
 } from "@/types/meeting";
+
+export const dynamic = "force-dynamic";
 
 // ---------------------------------------------------------------------------
 // Shared Prisma include — produces the MeetingWithAttendees shape
@@ -24,6 +31,9 @@ const MEETING_INCLUDE = {
         select: { id: true, name: true, email: true, role: true },
       },
     },
+  },
+  ticket: {
+    select: { id: true, title: true, createdById: true },
   },
 } as const;
 
@@ -210,11 +220,64 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     // -----------------------------------------------------------------------
-    // Apply updates inside a transaction
+    // RSVP & Cancellation Logic
+    // -----------------------------------------------------------------------
+
+    const meetingWithTicket = meeting as typeof meeting & { ticket?: { createdById: string; title: string; id: string } | null };
+    const isHostOrCreator =
+      session.user.id === meeting.createdById ||
+      (meetingWithTicket.ticket !== null && meetingWithTicket.ticket !== undefined && session.user.id === meetingWithTicket.ticket.createdById);
+
+    // 1. IF HOST/CREATOR CANCELS
+    if (isHostOrCreator && (attendeeStatus === "CANCELLED" || attendeeStatus === "DECLINED")) {
+      await prisma.meetingAttendee.updateMany({
+        where: { meetingId: id },
+        data: { status: "CANCELLED" },
+      });
+
+      if (meeting.externalGoogleEventId) {
+        await deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => console.error("[PATCH /api/meetings/[id]] Failed to delete Google Meet room:", err));
+      }
+
+      let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
+      if (meetingWithTicket.ticket) {
+        ticketContext = { ticketId: meetingWithTicket.ticket.id, ticketTitle: meetingWithTicket.ticket.title };
+      }
+
+      const updatedMeetingRecord = await fetchMeeting(id);
+      if (updatedMeetingRecord) {
+        const emailPayload = await buildEmailPayload(updatedMeetingRecord, ticketContext);
+        sendMeetingCancelledEmail(emailPayload).catch((err) => console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err));
+        return NextResponse.json({ data: updatedMeetingRecord as MeetingWithAttendees }, { status: 200 });
+      }
+    }
+
+    // 2. IF STANDARD ATTENDEE DECLINES
+    if (!isHostOrCreator && attendeeStatus === "DECLINED") {
+      await prisma.meetingAttendee.update({
+        where: { meetingId_userId: { meetingId: id, userId: session.user.id } },
+        data: { status: "DECLINED" },
+      });
+
+      let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
+      if (meetingWithTicket.ticket) {
+        ticketContext = { ticketId: meetingWithTicket.ticket.id, ticketTitle: meetingWithTicket.ticket.title };
+      }
+
+      const updatedMeetingRecord = await fetchMeeting(id);
+      if (updatedMeetingRecord) {
+        const emailPayload = await buildEmailPayload(updatedMeetingRecord, ticketContext);
+        sendAttendeeDeclinedEmail(emailPayload, { name: session.user.name, email: session.user.email }).catch((err) => console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err));
+        return NextResponse.json({ data: updatedMeetingRecord as MeetingWithAttendees }, { status: 200 });
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Apply updates inside a transaction (Rescheduling & Other RSVPs)
     // -----------------------------------------------------------------------
 
     const updatedMeeting = await prisma.$transaction(async (tx) => {
-      // 1. Update RSVP status for the caller if requested
+      // 1. Update RSVP status for the caller if requested (e.g. ACCEPTED)
       if (attendeeStatus !== undefined) {
         await tx.meetingAttendee.update({
           where: {
@@ -329,6 +392,21 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
         { status: 403 }
       );
     }
+
+    if (meeting.externalGoogleEventId) {
+      await deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => 
+        console.error("[DELETE /api/meetings/[id]] Failed to delete Google Meet room:", err)
+      );
+    }
+
+    let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
+    if (meeting.ticket) {
+      ticketContext = { ticketId: meeting.ticket.id, ticketTitle: meeting.ticket.title };
+    }
+    const emailPayload = await buildEmailPayload(meeting, ticketContext);
+    sendMeetingCancelledEmail(emailPayload).catch((err) => 
+      console.error("[DELETE /api/meetings/[id]] Email dispatch failed:", err)
+    );
 
     // Cascading delete on MeetingAttendee is configured in the Prisma schema
     await prisma.meeting.delete({ where: { id } });

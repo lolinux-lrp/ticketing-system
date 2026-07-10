@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useGetMeetingsQuery, useUpdateMeetingMutation } from "@/store/meetingsApi";
 import { ScheduleMeetingModal } from "@/components/meetings/ScheduleMeetingModal";
+import { LocalTime } from "@/components/ui/LocalTime";
 import type { MeetingWithAttendees, AttendeeStatusValue } from "@/types/meeting";
 
 // ---------------------------------------------------------------------------
@@ -27,25 +28,13 @@ function MeetingItem({ meeting, now }: { meeting: MeetingWithAttendees; now: num
   );
   const amIHost = meeting.createdById === session?.user?.id;
 
-  const startStr = new Date(meeting.startTime).toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const endStr = new Date(meeting.endTime).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
   return (
     <div className="flex flex-col gap-3 p-4 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }}>
       <div className="flex justify-between items-start">
         <div>
           <h4 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{meeting.title}</h4>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {startStr} - {endStr}
+          <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
+            <LocalTime date={meeting.startTime} options={{ weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }} /> - <LocalTime date={meeting.endTime} options={{ hour: "numeric", minute: "2-digit" }} />
           </p>
         </div>
         {!isPastEnd && myAttendeeRecord && !amIHost && myAttendeeRecord.status === "PENDING" && (
@@ -96,7 +85,15 @@ function MeetingItem({ meeting, now }: { meeting: MeetingWithAttendees; now: num
 
       {!isPastEnd && (
         <div className="mt-2 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
-          {isWithin15Mins ? (
+          {myAttendeeRecord?.status === "DECLINED" ? (
+            <div className="w-full text-center py-2 rounded-lg text-xs font-bold bg-rose-500/10 text-rose-600">
+              You Declined
+            </div>
+          ) : myAttendeeRecord?.status === "CANCELLED" ? (
+            <div className="w-full text-center py-2 rounded-lg text-xs font-bold bg-gray-500/10 text-gray-500">
+              Meeting Cancelled
+            </div>
+          ) : isWithin15Mins ? (
             <a
               href={meeting.meetingUrl}
               target="_blank"
@@ -198,7 +195,7 @@ export function TicketMeetingsCard({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         ticketId={ticketId}
-        defaultTitle={`Sync: ${ticketTitle || "Ticket " + ticketId.slice(-6)}`}
+        defaultTitle={ticketTitle || `Ticket ${ticketId.slice(-6)}`}
         defaultAttendeeIds={defaultAttendees}
         onSuccess={() => setIsModalOpen(false)}
       />

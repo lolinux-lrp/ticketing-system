@@ -10,6 +10,8 @@ import type {
   MeetingWithAttendees,
 } from "@/types/meeting";
 
+export const dynamic = "force-dynamic";
+
 // ---------------------------------------------------------------------------
 // Prisma select shape — used in both GET and POST to produce MeetingWithAttendees
 // ---------------------------------------------------------------------------
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, description, startTime, endTime, ticketId, attendeeIds } =
+    const { title, description, startTime, endTime, ticketId, attendeeIds, teammateIds } =
       validation.data;
 
     const startDate = new Date(startTime);
@@ -107,7 +109,9 @@ export async function POST(req: NextRequest) {
     // Applied to the host AND to every invited attendee to prevent either party
     // from being double-booked.
     // -----------------------------------------------------------------------
-    const allParticipantIds = [createdById, ...attendeeIds];
+    // Combine attendeeIds and teammateIds
+    const combinedInvitees = [...attendeeIds, ...(teammateIds || [])];
+    const allParticipantIds = [createdById, ...combinedInvitees];
 
     const conflictingMeeting = await prisma.meeting.findFirst({
       where: {
@@ -160,7 +164,7 @@ export async function POST(req: NextRequest) {
     // Step 2: Persist Meeting + MeetingAttendee records in a single transaction
     // -----------------------------------------------------------------------
 
-    const uniqueAttendeeIds = Array.from(new Set(attendeeIds)).filter(uid => uid !== createdById);
+    const uniqueAttendeeIds = Array.from(new Set(combinedInvitees)).filter(uid => uid !== createdById);
 
     // Build the attendee create list: host first (ACCEPTED), then invitees (PENDING)
     const attendeeCreateData = [

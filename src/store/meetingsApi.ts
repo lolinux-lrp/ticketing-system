@@ -8,7 +8,7 @@ import type {
 export const meetingsApi = createApi({
   reducerPath: "meetingsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api/meetings" }),
-  tagTypes: ["Meeting"],
+  tagTypes: ["Meeting", "Ticket"],
   endpoints: (builder) => ({
     getMeetings: builder.query<{ data: MeetingWithAttendees[] }, void>({
       query: () => "/",
@@ -23,7 +23,7 @@ export const meetingsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Meeting"],
+      invalidatesTags: ["Meeting", "Ticket"],
     }),
     updateMeeting: builder.mutation<
       { data: MeetingWithAttendees },
@@ -34,14 +34,14 @@ export const meetingsApi = createApi({
         method: "PATCH",
         body,
       }),
-      invalidatesTags: ["Meeting"],
+      invalidatesTags: ["Meeting", "Ticket"],
     }),
     deleteMeeting: builder.mutation<{ message: string }, string>({
       query: (id) => ({
         url: `/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["Meeting"],
+      invalidatesTags: ["Meeting", "Ticket"],
     }),
   }),
 });

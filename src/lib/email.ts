@@ -206,3 +206,145 @@ export async function sendMeetingInvitationEmail(
     })
   );
 }
+
+// ---------------------------------------------------------------------------
+// Meeting cancellation email
+// ---------------------------------------------------------------------------
+
+export async function sendMeetingCancelledEmail(
+  payload: MeetingEmailPayload
+): Promise<void> {
+  const transport = createTransport();
+  const from = process.env.GOOGLE_EMAIL
+    ? `"${"TicketFlow"}" <${process.env.GOOGLE_EMAIL}>`
+    : `"${"TicketFlow"}" <${DEFAULT_FROM_EMAIL}>`;
+
+  // Dynamically import the template for cancellation
+  const { generateMeetingCancelledEmail } = await import(
+    "@/lib/email/templates/meeting"
+  );
+  
+  // Set method and status explicitly for the cancellation payload
+  const cancelPayload: MeetingEmailPayload = {
+    ...payload,
+    method: "CANCEL",
+    status: "CANCELLED",
+  };
+
+  const { subject, html, text } = generateMeetingCancelledEmail(cancelPayload);
+  const icsContent = createMeetingIcsAttachment(cancelPayload);
+
+  const icsAttachment = {
+    filename: "cancel.ics",
+    content: icsContent,
+    contentType: "text/calendar; method=CANCEL",
+  } as const;
+
+  type Recipient = { name: string | null; email: string };
+  const recipients: Recipient[] = [
+    ...(cancelPayload.host.email
+      ? [{ name: cancelPayload.host.name, email: cancelPayload.host.email }]
+      : []),
+    ...cancelPayload.attendees
+      .filter((a): a is typeof a & { email: string } => a.email !== null)
+      .map((a) => ({ name: a.name, email: a.email })),
+  ];
+
+  if (recipients.length === 0) return;
+
+  await Promise.all(
+    recipients.map(async (recipient) => {
+      await transport.sendMail({
+        from,
+        to: recipient.name
+          ? `"${recipient.name}" <${recipient.email}>`
+          : recipient.email,
+        subject,
+        text,
+        html,
+        attachments: [icsAttachment],
+      });
+    })
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Attendee declined email
+// ---------------------------------------------------------------------------
+
+export async function sendAttendeeDeclinedEmail(
+  payload: MeetingEmailPayload,
+  declinedAttendee: { name: string | null; email: string | null }
+): Promise<void> {
+  const transport = createTransport();
+  const from = process.env.GOOGLE_EMAIL
+    ? `"${"TicketFlow"}" <${process.env.GOOGLE_EMAIL}>`
+    : `"${"TicketFlow"}" <${DEFAULT_FROM_EMAIL}>`;
+
+  const { generateAttendeeDeclinedEmail } = await import(
+    "@/lib/email/templates/meeting"
+  );
+
+  const { subject, html, text } = generateAttendeeDeclinedEmail(
+    payload,
+    declinedAttendee
+  );
+
+  const hostEmail = payload.host.email;
+  if (!hostEmail) return; // Cannot notify host if no email
+
+  await transport.sendMail({
+    from,
+    to: payload.host.name
+      ? `"${payload.host.name}" <${hostEmail}>`
+      : hostEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Meeting reminder email
+// ---------------------------------------------------------------------------
+
+export async function sendMeetingReminderEmail(
+  payload: MeetingEmailPayload
+): Promise<void> {
+  const transport = createTransport();
+  const from = process.env.GOOGLE_EMAIL
+    ? `"${"TicketFlow"}" <${process.env.GOOGLE_EMAIL}>`
+    : `"${"TicketFlow"}" <${DEFAULT_FROM_EMAIL}>`;
+
+  const { generateMeetingReminderEmail } = await import(
+    "@/lib/email/templates/meeting"
+  );
+
+  const { subject, html, text } = generateMeetingReminderEmail(payload);
+
+  type Recipient = { name: string | null; email: string };
+  const recipients: Recipient[] = [
+    ...(payload.host.email
+      ? [{ name: payload.host.name, email: payload.host.email }]
+      : []),
+    ...payload.attendees
+      .filter((a): a is typeof a & { email: string } => a.email !== null)
+      .map((a) => ({ name: a.name, email: a.email })),
+  ];
+
+  if (recipients.length === 0) return;
+
+  await Promise.all(
+    recipients.map(async (recipient) => {
+      await transport.sendMail({
+        from,
+        to: recipient.name
+          ? `"${recipient.name}" <${recipient.email}>`
+          : recipient.email,
+        subject,
+        text,
+        html,
+      });
+    })
+  );
+}

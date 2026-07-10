@@ -101,6 +101,8 @@ export interface CreateMeetingPayload {
   createdById: string;
   /** User IDs of non-host attendees to invite. */
   attendeeIds: string[];
+  /** Optional array of teammate user IDs to invite */
+  teammateIds?: string[];
 }
 
 /**
@@ -169,4 +171,8 @@ export interface MeetingEmailPayload {
   attendees: EmailAttendeeEntry[];
   /** Populated when the meeting is associated with a support ticket. */
   ticketContext?: MeetingTicketContext;
+  /** Optional override for the ICS method (defaults to "REQUEST"). */
+  method?: "REQUEST" | "CANCEL";
+  /** Optional override for the ICS status (defaults to "CONFIRMED"). */
+  status?: "CONFIRMED" | "CANCELLED";
 }

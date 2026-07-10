@@ -328,3 +328,213 @@ export function generateMeetingInvitationEmail(
 
   return { subject, html, text };
 }
+
+/**
+ * Generates the subject, HTML, and plain-text bodies for a meeting cancellation.
+ */
+export function generateMeetingCancelledEmail(
+  payload: MeetingEmailPayload
+): MeetingInvitationEmailContent {
+  const { title, startTimeUtc, endTimeUtc, host, ticketContext } = payload;
+  const startFormatted = formatUtcDateTime(startTimeUtc);
+  const endFormatted = formatUtcDateTime(endTimeUtc);
+  const hostDisplay = displayName(host.name, host.email);
+
+  const subject = ticketContext
+    ? `Cancelled: ${title} [Ticket #${ticketContext.ticketId}]`
+    : `Cancelled: ${title}`;
+
+  const text = [
+    `The following meeting has been cancelled by the host.`,
+    ``,
+    `Title:  ${title}`,
+    `Start:  ${startFormatted}`,
+    `End:    ${endFormatted}`,
+    `Host:   ${hostDisplay}`,
+    ticketContext ? `Linked Ticket: ${ticketContext.ticketTitle} (#${ticketContext.ticketId})` : "",
+    ``,
+    `A cancellation update (.ics) is attached to remove it from your calendar.`,
+    ``,
+    `— TicketFlow`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:${TOKEN.white};border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);max-width:560px;width:100%;">
+          <tr>
+            <td style="background:#ef4444;padding:28px 36px;">
+              <p style="margin:0;font-family:${TOKEN.font};font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75);">TicketFlow</p>
+              <h1 style="margin:8px 0 0;font-family:${TOKEN.font};font-size:22px;font-weight:700;color:${TOKEN.white};line-height:1.3;">
+                🚫 Meeting Cancelled
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <h2 style="margin:0 0 20px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">${title}</h2>
+              <p style="margin:0 0 20px;font-family:${TOKEN.font};font-size:15px;color:${TOKEN.textPrimary};">
+                This meeting has been cancelled by the host (<strong>${hostDisplay}</strong>).
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:${TOKEN.surface};border:1px solid ${TOKEN.border};border-radius:8px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 4px;font-family:${TOKEN.font};font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${TOKEN.textSecondary};">Originally Scheduled For</p>
+                    <p style="margin:0;font-family:${TOKEN.font};font-size:14px;color:${TOKEN.textPrimary};">${startFormatted} - ${endFormatted}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Generates the subject, HTML, and plain-text bodies for an attendee decline notification.
+ */
+export function generateAttendeeDeclinedEmail(
+  payload: MeetingEmailPayload,
+  declinedAttendee: { name: string | null; email: string | null }
+): MeetingInvitationEmailContent {
+  const { title, ticketContext } = payload;
+  const attendeeDisplay = displayName(declinedAttendee.name, declinedAttendee.email);
+
+  const subject = ticketContext
+    ? `Declined: ${attendeeDisplay} cannot attend ${title} [Ticket #${ticketContext.ticketId}]`
+    : `Declined: ${attendeeDisplay} cannot attend ${title}`;
+
+  const text = [
+    `${attendeeDisplay} has declined your meeting invitation.`,
+    ``,
+    `Meeting: ${title}`,
+    ticketContext ? `Linked Ticket: ${ticketContext.ticketTitle} (#${ticketContext.ticketId})` : "",
+    ``,
+    `— TicketFlow`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:${TOKEN.white};border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);max-width:560px;width:100%;">
+          <tr>
+            <td style="background:${TOKEN.surface};padding:28px 36px;border-bottom:1px solid ${TOKEN.border};">
+              <h1 style="margin:0;font-family:${TOKEN.font};font-size:18px;font-weight:600;color:${TOKEN.textPrimary};">
+                RSVP Update
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <p style="margin:0 0 16px;font-family:${TOKEN.font};font-size:15px;color:${TOKEN.textPrimary};">
+                <strong>${attendeeDisplay}</strong> has declined your invitation to:
+              </p>
+              <div style="padding:16px;background:${TOKEN.surface};border-radius:6px;border-left:3px solid #fbbf24;">
+                <p style="margin:0;font-family:${TOKEN.font};font-size:16px;font-weight:600;color:${TOKEN.textPrimary};">${title}</p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Generates the subject, HTML, and plain-text bodies for a meeting reminder.
+ */
+export function generateMeetingReminderEmail(
+  payload: MeetingEmailPayload
+): MeetingInvitationEmailContent {
+  const { title, startTimeUtc, meetingUrl, ticketContext } = payload;
+  const startFormatted = formatUtcDateTime(startTimeUtc);
+
+  const subject = ticketContext
+    ? `Reminder: ${title} starts in 15 minutes [Ticket #${ticketContext.ticketId}]`
+    : `Reminder: ${title} starts in 15 minutes`;
+
+  const text = [
+    `Your meeting starts in 15 minutes.`,
+    ``,
+    `Title:  ${title}`,
+    `Time:   ${startFormatted}`,
+    ticketContext ? `Linked Ticket: ${ticketContext.ticketTitle} (#${ticketContext.ticketId})` : "",
+    ``,
+    `Join the meeting here: ${meetingUrl}`,
+    ``,
+    `— TicketFlow`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:${TOKEN.white};border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);max-width:560px;width:100%;">
+          <tr>
+            <td style="background:${TOKEN.brand};padding:28px 36px;">
+              <p style="margin:0;font-family:${TOKEN.font};font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75);">TicketFlow</p>
+              <h1 style="margin:8px 0 0;font-family:${TOKEN.font};font-size:22px;font-weight:700;color:${TOKEN.white};line-height:1.3;">
+                ⏰ Meeting Reminder
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <h2 style="margin:0 0 16px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">${title}</h2>
+              <p style="margin:0 0 24px;font-family:${TOKEN.font};font-size:15px;color:${TOKEN.textPrimary};">
+                Your meeting will begin in approximately <strong>15 minutes</strong> (${startFormatted}).
+              </p>
+              <div style="text-align:center;">
+                <a href="${meetingUrl}" style="display:inline-block;background:${TOKEN.brand};color:${TOKEN.white};font-family:${TOKEN.font};font-size:16px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:8px;">
+                  Join Meeting Now
+                </a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html, text };
+}

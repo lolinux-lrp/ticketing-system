@@ -22,6 +22,8 @@ export const createMeetingSchema = z.object({
     .array(z.string())
     .min(0)
     .default([]),
+  /** Optional array of teammate user IDs to invite */
+  teammateIds: z.array(z.string()).optional(),
 });
 
 export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;

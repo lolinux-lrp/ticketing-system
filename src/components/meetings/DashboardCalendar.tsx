@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useGetMeetingsQuery, useUpdateMeetingMutation, useDeleteMeetingMutation } from "@/store/meetingsApi";
 import type { MeetingWithAttendees } from "@/types/meeting";
+import { LocalTime } from "@/components/ui/LocalTime";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -35,11 +36,6 @@ function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: nu
   );
   const amIHost = meeting.createdById === session?.user?.id;
 
-  const startDate = new Date(meeting.startTime);
-  const monthDay = startDate.toLocaleString("en-US", { month: "short", day: "numeric" });
-  const timeStr = startDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const endTimeStr = new Date(meeting.endTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-
   const isPending = !isPastEnd && myAttendeeRecord && !amIHost && myAttendeeRecord.status === "PENDING";
 
   return (
@@ -51,8 +47,12 @@ function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: nu
       >
         <div className="flex items-center gap-4">
           <div className="flex flex-col items-center justify-center w-14 h-14 rounded-lg shrink-0" style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
-            <span className="text-xs font-bold uppercase" style={{ color: "var(--brand)" }}>{monthDay.split(' ')[0]}</span>
-            <span className="text-lg font-black leading-none">{monthDay.split(' ')[1]}</span>
+            <span className="text-xs font-bold uppercase" style={{ color: "var(--brand)" }}>
+              <LocalTime date={meeting.startTime} options={{ month: "short" }} />
+            </span>
+            <span className="text-lg font-black leading-none">
+              <LocalTime date={meeting.startTime} options={{ day: "numeric" }} />
+            </span>
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
@@ -65,7 +65,7 @@ function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: nu
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
               </svg>
-              {timeStr} - {endTimeStr}
+              <LocalTime date={meeting.startTime} options={{ hour: "numeric", minute: "2-digit" }} /> - <LocalTime date={meeting.endTime} options={{ hour: "numeric", minute: "2-digit" }} />
             </p>
           </div>
         </div>
@@ -160,7 +160,15 @@ function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: nu
             </div>
 
             {!isPastEnd && (
-              isWithin15Mins ? (
+              myAttendeeRecord?.status === "DECLINED" ? (
+                <div className="px-6 py-2 rounded-lg text-sm font-bold bg-rose-500/10 text-rose-600">
+                  You Declined
+                </div>
+              ) : myAttendeeRecord?.status === "CANCELLED" ? (
+                <div className="px-6 py-2 rounded-lg text-sm font-bold bg-gray-500/10 text-gray-500">
+                  Meeting Cancelled
+                </div>
+              ) : isWithin15Mins ? (
                 <a href={meeting.meetingUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-2 rounded-lg text-sm font-bold text-white transition-opacity hover:opacity-90 shadow-lg shadow-indigo-500/25" style={{ background: "var(--brand)" }}>
                   Join Meeting Now
                 </a>

@@ -110,15 +110,15 @@ export function createMeetingIcsAttachment(
     endInputType: "utc",
     endOutputType: "utc",
     url: payload.meetingUrl || undefined,
-    status: "CONFIRMED",
+    status: payload.status || "CONFIRMED",
     busyStatus: "BUSY",
     organizer: {
       name: "TicketFlow",
       email: organizerEmail,
     },
     attendees: attendees.length > 0 ? attendees : undefined,
-    // REQUEST method signals to calendar clients that this is an invitation
-    method: "REQUEST",
+    // REQUEST method signals an invite; CANCEL signals cancellation
+    method: payload.method || "REQUEST",
     productId: "TicketFlow/meeting-scheduler",
   };
 

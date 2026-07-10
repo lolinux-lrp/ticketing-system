@@ -118,9 +118,10 @@ export function TicketRow({ ticket }: TicketRowProps) {
           ) : (
             <select
               value={ticket.status}
-              disabled={isUpdating}
+              disabled={isUpdating || !ticket.assignedToId}
+              title={!ticket.assignedToId ? "Assign ticket to update status" : undefined}
               onChange={(e) => handleStatusChange(e.target.value as Status)}
-              className="input-base cursor-pointer disabled:opacity-50"
+              className="input-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ padding: "4px 8px", fontSize: "12px", width: "auto", minWidth: "110px" }}
             >
               {(["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as Status[]).map((s) => (

@@ -166,3 +166,25 @@ export async function createSilentGoogleMeetRoom(
     externalGoogleEventId: eventId,
   };
 }
+
+/**
+ * Deletes a Google Meet room by removing the underlying Google Calendar event.
+ *
+ * @param externalGoogleEventId - The Google Calendar event ID to delete.
+ * @throws If any required OAuth2 env vars are missing.
+ * @throws If the Google Calendar API returns an error.
+ */
+export async function deleteGoogleMeetRoom(externalGoogleEventId: string): Promise<void> {
+  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
+
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+  await calendar.events.delete({
+    calendarId: "primary",
+    eventId: externalGoogleEventId,
+    sendUpdates: "none", // Prevent Google from sending cancellation emails
+  });
+}
