@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       where: { id: { in: allParticipantIds } },
       select: { email: true }
     });
-    const attendeeEmails = participants.map(p => p.email);
+    const attendeeEmails = participants.flatMap(p => p.email ? [p.email] : []);
 
     // -----------------------------------------------------------------------
     // Step 1: Provision the Google Meet room silently (no Google emails sent)

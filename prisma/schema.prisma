@@ -106,6 +106,9 @@ model Ticket {
   @@index([createdById])
   @@index([assignedToId])
   @@index([status, priority])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([priority, createdAt])
 }
 
 model Comment {

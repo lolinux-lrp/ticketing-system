@@ -16,6 +16,8 @@ export const ticketsApi = createApi({
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api" }),
   tagTypes: ["Ticket"],
+  refetchOnFocus: true,
+  refetchOnReconnect: true,
   endpoints: (builder) => ({
     getTickets: builder.query<Ticket[], GetTicketsParams | void>({
       query: (params) => ({

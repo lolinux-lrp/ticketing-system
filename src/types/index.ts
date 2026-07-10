@@ -8,7 +8,10 @@ export interface TicketUser {
   role: Role;
 }
 
-export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt"> {
+export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "workDone" | "searchVector"> {
+  description?: string;
+  workDone?: string | null;
+  searchVector?: unknown;
   createdAt: string;
   updatedAt: string;
   createdBy: TicketUser;

@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { setupListeners } from "@reduxjs/toolkit/query";
 import { ticketsApi } from "./ticketsApi";
 import { usersApi } from "./usersApi";
 import { commentsApi } from "./commentsApi";
@@ -19,6 +20,8 @@ export const store = configureStore({
       meetingsApi.middleware
     ),
 });
+
+setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
