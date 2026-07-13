@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { createTicketSchema, getTicketSchema } from "@/lib/validations/tickets";
 import { can } from "@/lib/auth/policy";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ticket: newTicket }, { status: 201 });
   } catch (error) {
-    console.log("Error creating Ticket:", error);
+    console.error("Error creating Ticket:", error);
     return NextResponse.json(
       { error: "Failed to create ticket" },
       { status: 500 },
@@ -82,7 +84,17 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
         take: 50,
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          workDone: true,
+          status: true,
+          priority: true,
+          createdAt: true,
+          updatedAt: true,
+          assignedToId: true,
+          createdById: true,
           assignedTo: { select: { id: true, name: true, role: true } },
           createdBy: { select: { id: true, name: true, role: true } },
         },
@@ -105,7 +117,17 @@ export async function GET(req: NextRequest) {
     const tickets = await prisma.ticket.findMany({
       where,
       orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        workDone: true,
+        status: true,
+        priority: true,
+        createdAt: true,
+        updatedAt: true,
+        assignedToId: true,
+        createdById: true,
         assignedTo: { select: { id: true, name: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },
       },
@@ -113,7 +135,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: tickets });
   } catch (error) {
-    console.log("Error fetching tickets: ", error);
+    console.error("Error fetching tickets: ", error);
     return NextResponse.json(
       { error: "Failed to fetch tickets" },
       { status: 500 },

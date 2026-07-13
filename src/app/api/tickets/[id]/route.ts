@@ -7,6 +7,8 @@ import { sendTicketAssignmentEmail } from "@/lib/email";
 import { RouteParams } from "@/types/api";
 import { can } from "@/lib/auth/policy";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -90,6 +92,35 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       if (!can(session.user, "ticket:assign", { ...existingTicket, assignedToId: data.assignedToId })) {
         return NextResponse.json({ error: "Forbidden: Insufficient permissions to assign this ticket" }, { status: 403 });
       }
+    }
+
+    // Phase 1 — Unassigned Status Guard
+    // A ticket must be assigned to an agent before its status can be moved away from OPEN.
+    if (data.status !== undefined && data.status !== "OPEN") {
+      const finalAssignedToId = data.assignedToId !== undefined 
+        ? data.assignedToId 
+        : existingTicket.assignedToId;
+
+      if (finalAssignedToId === null) {
+        return NextResponse.json(
+          { error: "A ticket must be assigned to an agent before its status can be changed." },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Phase 2 — Reassignment Theft Guard
+    // Only an ADMIN may change the assignee of a ticket that is already claimed.
+    if (
+      data.assignedToId !== undefined &&
+      existingTicket.assignedToId !== null &&
+      data.assignedToId !== existingTicket.assignedToId &&
+      session.user.role !== "ADMIN"
+    ) {
+      return NextResponse.json(
+        { error: "Only administrators can reassign a ticket that has already been claimed." },
+        { status: 403 },
+      );
     }
 
     const updateTicket = await prisma.ticket.update({

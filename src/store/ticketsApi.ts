@@ -16,6 +16,8 @@ export const ticketsApi = createApi({
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api" }),
   tagTypes: ["Ticket"],
+  refetchOnFocus: true,
+  refetchOnReconnect: true,
   endpoints: (builder) => ({
     getTickets: builder.query<Ticket[], GetTicketsParams | void>({
       query: (params) => ({
@@ -66,10 +68,6 @@ export const ticketsApi = createApi({
       query: (id) => `tickets/${id}`,
       providesTags: (result, error, id) => [{ type: "Ticket", id }],
     }),
-    getAgents: builder.query<TicketUser[], void>({
-      query: () => "users/agents",
-      transformResponse: (response: { data: TicketUser[] }) => response.data,
-    }),
   }),
 });
 
@@ -79,5 +77,4 @@ export const {
   useCreateTicketMutation,
   useUpdateTicketMutation,
   useDeleteTicketMutation,
-  useGetAgentsQuery,
 } = ticketsApi;

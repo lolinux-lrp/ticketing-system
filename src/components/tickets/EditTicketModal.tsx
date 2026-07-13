@@ -6,6 +6,7 @@ import type { Ticket } from "@/types";
 import { useUpdateTicketMutation } from "@/store/ticketsApi";
 import { extractErrorMessage } from "./extractErrorMessage";
 import { useSession } from "next-auth/react";
+import type { UpdateTicketPayload } from "@/types";
 
 interface EditTicketModalProps {
   ticket: Ticket;
@@ -15,7 +16,7 @@ interface EditTicketModalProps {
 
 export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProps) {
   const [title, setTitle] = useState(ticket.title);
-  const [description, setDescription] = useState(ticket.description);
+  const [description, setDescription] = useState(ticket.description || "");
   const [workDone, setWorkDone] = useState(ticket.workDone || "");
   const [formError, setFormError] = useState<string | null>(null);
   const [updateTicket, { isLoading }] = useUpdateTicketMutation();
@@ -26,7 +27,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
     setWasOpen(isOpen);
     if (isOpen) {
       setTitle(ticket.title);
-      setDescription(ticket.description);
+      setDescription(ticket.description || "");
       setWorkDone(ticket.workDone || "");
       setFormError(null);
     }
@@ -45,9 +46,9 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
     e.preventDefault();
     setFormError(null);
     try {
-      const body: Record<string, string> = {};
+      const body: UpdateTicketPayload = {};
       if (title !== ticket.title) body.title = title;
-      if (description !== ticket.description) body.description = description;
+      if (description !== (ticket.description || "")) body.description = description;
       if (workDone !== (ticket.workDone || "")) body.workDone = workDone;
 
       await updateTicket({ id: ticket.id, body }).unwrap();
@@ -123,7 +124,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
                 </label>
                 <textarea
                   id="edit-description"
-                  value={description}
+                  value={description || ""}
                   onChange={(e) => setDescription(e.target.value)}
                   required
                   minLength={10}

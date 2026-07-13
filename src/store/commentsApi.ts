@@ -23,19 +23,36 @@ export const commentsApi = createApi({
         method: "POST",
         body: payload,
       }),
-
       invalidatesTags: [{ type: "Comment", id: "LIST" }],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          const { ticketsApi } = await import("@/store/ticketsApi");
+          dispatch(ticketsApi.util.invalidateTags([{ type: "Ticket", id: arg.ticketId }]));
+        } catch (error) {
+          console.error("[commentsApi.createComment] Failed to invalidate ticket cache:", error);
+        }
+      }
     }),
 
-    deleteComment: builder.mutation<Comment, string>({
-      query: (commentId) => ({
+    deleteComment: builder.mutation<Comment, { commentId: string; ticketId: string }>({
+      query: ({ commentId }) => ({
         url: `/comments?id=${commentId}`,
         method: "DELETE",
       }),
-      invalidatesTags: (result, error, id) => [
-        { type: "Comment", id },
+      invalidatesTags: (result, error, arg) => [
+        { type: "Comment", id: arg.commentId },
         { type: "Comment", id: "LIST" },
       ],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          const { ticketsApi } = await import("@/store/ticketsApi");
+          dispatch(ticketsApi.util.invalidateTags([{ type: "Ticket", id: arg.ticketId }]));
+        } catch (error) {
+          console.error("[commentsApi.deleteComment] Failed to invalidate ticket cache:", error);
+        }
+      }
     }),
   }),
 });
