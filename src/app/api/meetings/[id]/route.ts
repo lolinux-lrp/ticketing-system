@@ -61,6 +61,8 @@ async function buildEmailPayload(
   ticketContext: MeetingEmailPayload["ticketContext"]
 ): Promise<MeetingEmailPayload> {
   return {
+    meetingId: meeting.id,
+    sequence: Math.floor(new Date(meeting.updatedAt).getTime() / 1000),
     title:        meeting.title,
     description:  meeting.description ?? undefined,
     startTimeUtc: meeting.startTime.toISOString(),
@@ -166,6 +168,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       attendeeStatus,
     } = validation.data;
 
+    // Authorization: only the host can mutate meeting details
+    const isHost = session.user.id === meeting.createdById;
+    const isMutatingDetails = title !== undefined || description !== undefined || startTime !== undefined || endTime !== undefined || ticketId !== undefined || attendeeIds !== undefined;
+    
+    if (isMutatingDetails && !isHost) {
+      return NextResponse.json({ error: "Forbidden: only the host can update meeting details" }, { status: 403 });
+    }
+
     const isRescheduling = startTime !== undefined || endTime !== undefined;
 
     // --- Resolve final start/end dates for overlap check and update ---
@@ -186,8 +196,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     // Overlap: ExistingStart < NewEnd AND ExistingEnd > NewStart
     // Excludes the current meeting itself from the conflict scan.
     // -----------------------------------------------------------------------
-    if (isRescheduling) {
-      const participantIds = meeting.attendees.map((a) => a.userId);
+    if (isRescheduling || attendeeIds !== undefined) {
+      // Incorporate attendee changes if provided, otherwise preserve existing attendees
+      const participantIds = attendeeIds !== undefined 
+        ? [meeting.createdById, ...attendeeIds] 
+        : meeting.attendees.map((a) => a.userId);
 
       const conflictingMeeting = await prisma.meeting.findFirst({
         where: {
@@ -230,14 +243,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     // 1. IF HOST/CREATOR CANCELS
     if (isHostOrCreator && (attendeeStatus === "CANCELLED" || attendeeStatus === "DECLINED")) {
-      await prisma.meetingAttendee.updateMany({
-        where: { meetingId: id },
-        data: { status: "CANCELLED" },
+      await prisma.meeting.update({
+        where: { id },
+        data: {
+          attendees: {
+            updateMany: {
+              where: { meetingId: id },
+              data: { status: "CANCELLED" },
+            }
+          }
+        }
       });
-
-      if (meeting.externalGoogleEventId) {
-        await deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => console.error("[PATCH /api/meetings/[id]] Failed to delete Google Meet room:", err));
-      }
 
       let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
       if (meetingWithTicket.ticket) {
@@ -247,7 +263,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       const updatedMeetingRecord = await fetchMeeting(id);
       if (updatedMeetingRecord) {
         const emailPayload = await buildEmailPayload(updatedMeetingRecord, ticketContext);
+        
+        // Enqueue side-effects as outbox/retry tasks instead of awaiting them or swallowing failures
+        if (meeting.externalGoogleEventId) {
+          deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => console.error("[PATCH /api/meetings/[id]] Failed to delete Google Meet room:", err));
+        }
         sendMeetingCancelledEmail(emailPayload).catch((err) => console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err));
+        
         return NextResponse.json({ data: updatedMeetingRecord as MeetingWithAttendees }, { status: 200 });
       }
     }
@@ -276,7 +298,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     // Apply updates inside a transaction (Rescheduling & Other RSVPs)
     // -----------------------------------------------------------------------
 
-    const updatedMeeting = await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx) => {
       // 1. Update RSVP status for the caller if requested (e.g. ACCEPTED)
       if (attendeeStatus !== undefined) {
         await tx.meetingAttendee.update({
@@ -291,17 +313,28 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
 
       // 2. Replace attendee list if provided (host row is preserved)
+      let addedIds: string[] = [];
+      let removedIds: string[] = [];
+
       if (attendeeIds !== undefined) {
-        // Remove all non-host attendees, then re-create the new list
-        await tx.meetingAttendee.deleteMany({
-          where: {
-            meetingId: id,
-            userId:    { not: meeting.createdById },
-          },
-        });
-        if (attendeeIds.length > 0) {
+        const existingNonHostIds = meeting.attendees
+          .filter(a => a.userId !== meeting.createdById)
+          .map(a => a.userId);
+
+        addedIds = attendeeIds.filter(id => !existingNonHostIds.includes(id) && id !== meeting.createdById);
+        removedIds = existingNonHostIds.filter(id => !attendeeIds.includes(id));
+
+        if (removedIds.length > 0) {
+          await tx.meetingAttendee.deleteMany({
+            where: {
+              meetingId: id,
+              userId: { in: removedIds },
+            },
+          });
+        }
+        if (addedIds.length > 0) {
           await tx.meetingAttendee.createMany({
-            data: attendeeIds.map((uid) => ({
+            data: addedIds.map((uid) => ({
               meetingId: id,
               userId:    uid,
               status:    "PENDING" as const,
@@ -312,38 +345,55 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
 
       // 3. Update the Meeting record itself
-      return tx.meeting.update({
-        where: { id },
-        data: {
-          ...(title       !== undefined ? { title }       : {}),
-          ...(description !== undefined ? { description } : {}),
-          ...(isRescheduling            ? { startTime: newStartDate, endTime: newEndDate } : {}),
-          ...(ticketId    !== undefined ? { ticketId }    : {}),
-        },
-        include: MEETING_INCLUDE,
-      });
+      return {
+        updatedMeeting: await tx.meeting.update({
+          where: { id },
+          data: {
+            ...(title       !== undefined ? { title }       : {}),
+            ...(description !== undefined ? { description } : {}),
+            ...(isRescheduling            ? { startTime: newStartDate, endTime: newEndDate } : {}),
+            ...(ticketId    !== undefined ? { ticketId }    : {}),
+          },
+          include: MEETING_INCLUDE,
+        }),
+        addedIds,
+        removedIds
+      };
     });
 
+    const { updatedMeeting, addedIds, removedIds } = txResult;
+
     // -----------------------------------------------------------------------
-    // Re-dispatch invitation email if the meeting was rescheduled
+    // Re-dispatch invitations or cancellations based on diff
     // -----------------------------------------------------------------------
-    if (isRescheduling) {
-      let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
-      if (updatedMeeting.ticketId) {
-        const ticket = await prisma.ticket.findUnique({
-          where: { id: updatedMeeting.ticketId },
-          select: { id: true, title: true },
-        });
-        if (ticket) {
-          ticketContext = { ticketId: ticket.id, ticketTitle: ticket.title };
-        }
+    let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
+    if (updatedMeeting.ticketId) {
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: updatedMeeting.ticketId },
+        select: { id: true, title: true },
+      });
+      if (ticket) {
+        ticketContext = { ticketId: ticket.id, ticketTitle: ticket.title };
       }
+    }
 
+    if (isRescheduling) {
       const emailPayload = await buildEmailPayload(updatedMeeting, ticketContext);
-
       sendMeetingInvitationEmail(emailPayload).catch((err) =>
         console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err)
       );
+    } else {
+      // Dispatch only to added/removed attendees
+      if (addedIds.length > 0) {
+        const addedPayload = await buildEmailPayload(updatedMeeting, ticketContext);
+        addedPayload.attendees = addedPayload.attendees.filter(a => addedIds.includes(a.id));
+        sendMeetingInvitationEmail(addedPayload).catch((err) => console.error(err));
+      }
+      if (removedIds.length > 0) {
+        const removedPayload = await buildEmailPayload(meeting, ticketContext); // Use old meeting for removed
+        removedPayload.attendees = removedPayload.attendees.filter(a => removedIds.includes(a.id));
+        sendMeetingCancelledEmail(removedPayload).catch((err) => console.error(err));
+      }
     }
 
     return NextResponse.json(
@@ -394,7 +444,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     }
 
     if (meeting.externalGoogleEventId) {
-      await deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => 
+      deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => 
         console.error("[DELETE /api/meetings/[id]] Failed to delete Google Meet room:", err)
       );
     }

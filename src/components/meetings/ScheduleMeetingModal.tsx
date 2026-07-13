@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useCreateMeetingMutation } from "@/store/meetingsApi";
 import { useGetAgentsQuery } from "@/store/usersApi";
 
@@ -11,6 +11,49 @@ interface ScheduleMeetingModalProps {
   defaultTitle?: string;
   defaultAttendeeIds?: string[];
   onSuccess: () => void;
+}
+
+interface TimeSelectProps {
+  hour: string; setHour: (v: string) => void;
+  minute: string; setMinute: (v: string) => void;
+  period: string; setPeriod: (v: string) => void;
+}
+
+function TimeSelect({ hour, setHour, minute, setMinute, period, setPeriod }: TimeSelectProps) {
+  return (
+    <div className="flex gap-2">
+      <input
+        required
+        type="number"
+        min="1"
+        max="12"
+        value={hour}
+        onChange={(e) => setHour(e.target.value)}
+        className="input-base w-16 text-center [&::-webkit-inner-spin-button]:appearance-none"
+        placeholder="12"
+      />
+      <span className="self-center font-bold" style={{ color: "var(--text-muted)" }}>:</span>
+      <input
+        required
+        type="text"
+        pattern="[0-5][0-9]"
+        title="00 to 59"
+        maxLength={2}
+        value={minute}
+        onChange={(e) => setMinute(e.target.value)}
+        className="input-base w-16 text-center"
+        placeholder="00"
+      />
+      <select
+        value={period}
+        onChange={(e) => setPeriod(e.target.value)}
+        className="input-base w-20 px-2"
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  );
 }
 
 export function ScheduleMeetingModal({
@@ -61,6 +104,16 @@ export function ScheduleMeetingModal({
   }, [agents, defaultAttendeeIds, selectedTeammateIds, searchQuery]);
 
   if (!isOpen) return null;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   const buildTimeString = (hStr: string, mStr: string, period: string) => {
     let h = parseInt(hStr || "0", 10);
@@ -119,7 +172,7 @@ export function ScheduleMeetingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
       <div 
         className="w-full max-w-lg rounded-2xl p-6 shadow-2xl" 
         style={{ background: "var(--surface-0)", border: "1px solid var(--border)" }}
@@ -191,76 +244,22 @@ export function ScheduleMeetingModal({
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                 Start Time
               </label>
-              <div className="flex gap-2">
-                <input
-                  required
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={startHour}
-                  onChange={(e) => setStartHour(e.target.value)}
-                  className="input-base w-16 text-center [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="12"
-                />
-                <span className="self-center font-bold" style={{ color: "var(--text-muted)" }}>:</span>
-                <input
-                  required
-                  type="text"
-                  pattern="[0-5][0-9]"
-                  title="00 to 59"
-                  maxLength={2}
-                  value={startMinute}
-                  onChange={(e) => setStartMinute(e.target.value)}
-                  className="input-base w-16 text-center"
-                  placeholder="00"
-                />
-                <select
-                  value={startPeriod}
-                  onChange={(e) => setStartPeriod(e.target.value)}
-                  className="input-base w-20 px-2"
-                >
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              </div>
+              <TimeSelect
+                hour={startHour} setHour={setStartHour}
+                minute={startMinute} setMinute={setStartMinute}
+                period={startPeriod} setPeriod={setStartPeriod}
+              />
             </div>
             
             <div className="flex-1">
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                 End Time
               </label>
-              <div className="flex gap-2">
-                <input
-                  required
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={endHour}
-                  onChange={(e) => setEndHour(e.target.value)}
-                  className="input-base w-16 text-center [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="12"
-                />
-                <span className="self-center font-bold" style={{ color: "var(--text-muted)" }}>:</span>
-                <input
-                  required
-                  type="text"
-                  pattern="[0-5][0-9]"
-                  title="00 to 59"
-                  maxLength={2}
-                  value={endMinute}
-                  onChange={(e) => setEndMinute(e.target.value)}
-                  className="input-base w-16 text-center"
-                  placeholder="00"
-                />
-                <select
-                  value={endPeriod}
-                  onChange={(e) => setEndPeriod(e.target.value)}
-                  className="input-base w-20 px-2"
-                >
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              </div>
+              <TimeSelect
+                hour={endHour} setHour={setEndHour}
+                minute={endMinute} setMinute={setEndMinute}
+                period={endPeriod} setPeriod={setEndPeriod}
+              />
             </div>
           </div>
 

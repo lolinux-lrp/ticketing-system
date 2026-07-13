@@ -87,6 +87,8 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           title: true,
+          description: true,
+          workDone: true,
           status: true,
           priority: true,
           createdAt: true,
@@ -118,6 +120,8 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         title: true,
+        description: true,
+        workDone: true,
         status: true,
         priority: true,
         createdAt: true,

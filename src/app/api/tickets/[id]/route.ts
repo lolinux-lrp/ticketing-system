@@ -97,10 +97,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     // Phase 1 — Unassigned Status Guard
     // A ticket must be assigned to an agent before its status can be moved away from OPEN.
     if (data.status !== undefined && data.status !== "OPEN") {
-      const willBeAssigned =
-        existingTicket.assignedToId !== null ||
-        (data.assignedToId !== undefined && data.assignedToId !== null);
-      if (!willBeAssigned) {
+      const finalAssignedToId = data.assignedToId !== undefined 
+        ? data.assignedToId 
+        : existingTicket.assignedToId;
+
+      if (finalAssignedToId === null) {
         return NextResponse.json(
           { error: "A ticket must be assigned to an agent before its status can be changed." },
           { status: 400 },

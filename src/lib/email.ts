@@ -1,6 +1,11 @@
 import nodemailer from "nodemailer";
 import type { MeetingEmailPayload } from "@/types/meeting";
-import { generateMeetingInvitationEmail } from "@/lib/email/templates/meeting";
+import { 
+  generateMeetingInvitationEmail,
+  generateMeetingCancelledEmail,
+  generateAttendeeDeclinedEmail,
+  generateMeetingReminderEmail
+} from "@/lib/email/templates/meeting";
 import { createMeetingIcsAttachment } from "@/lib/calendar/ics";
 
 const APP_BASE_URL = process.env.APP_BASE_URL;
@@ -83,7 +88,10 @@ export async function sendInviteEmail({ name, email, role, signupUrl, isUpgrade 
 
   await transport.sendMail({
     to: email,
-    from: process.env.GOOGLE_EMAIL ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>` : `"TicketFlow" <${DEFAULT_FROM_EMAIL}>`,
+    from: {
+      name: "TicketFlow",
+      address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+    },
     subject,
     text: textBody,
     html: htmlBody,
@@ -108,9 +116,10 @@ export async function sendTicketAssignmentEmail({
 }: TicketAssignmentEmailOptions) {
   const transport = createTransport();
   const ticketUrl = `${APP_BASE_URL}/tickets/${ticketId}`;
-  const from = process.env.GOOGLE_EMAIL
-    ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>`
-    : `"TicketFlow" <${DEFAULT_FROM_EMAIL}>`;
+  const from = {
+    name: "TicketFlow",
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  };
 
   await transport.sendMail({
     to: assigneeEmail,
@@ -155,9 +164,10 @@ export async function sendMeetingInvitationEmail(
   payload: MeetingEmailPayload
 ): Promise<void> {
   const transport = createTransport();
-  const from = process.env.GOOGLE_EMAIL
-    ? `"TicketFlow" <${process.env.GOOGLE_EMAIL}>`
-    : `"TicketFlow" <${DEFAULT_FROM_EMAIL}>`;
+  const from = {
+    name: "TicketFlow",
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  };
 
   // Generate template content (subject, html, text) once — shared for all recipients.
   const { subject, html, text } = generateMeetingInvitationEmail(payload);
@@ -190,19 +200,18 @@ export async function sendMeetingInvitationEmail(
   }
 
   // Dispatch one email per recipient.
-  await Promise.all(
+  await Promise.allSettled(
     recipients.map(async (recipient) => {
       await transport.sendMail({
         from,
         to: recipient.name
-          ? `"${recipient.name}" <${recipient.email}>`
+          ? { name: recipient.name, address: recipient.email }
           : recipient.email,
         subject,
         text,
         html,
         attachments: [icsAttachment],
       });
-
     })
   );
 }
@@ -215,14 +224,10 @@ export async function sendMeetingCancelledEmail(
   payload: MeetingEmailPayload
 ): Promise<void> {
   const transport = createTransport();
-  const from = process.env.GOOGLE_EMAIL
-    ? `"${"TicketFlow"}" <${process.env.GOOGLE_EMAIL}>`
-    : `"${"TicketFlow"}" <${DEFAULT_FROM_EMAIL}>`;
-
-  // Dynamically import the template for cancellation
-  const { generateMeetingCancelledEmail } = await import(
-    "@/lib/email/templates/meeting"
-  );
+  const from = {
+    name: "TicketFlow",
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  };
   
   // Set method and status explicitly for the cancellation payload
   const cancelPayload: MeetingEmailPayload = {
@@ -252,12 +257,12 @@ export async function sendMeetingCancelledEmail(
 
   if (recipients.length === 0) return;
 
-  await Promise.all(
+  await Promise.allSettled(
     recipients.map(async (recipient) => {
       await transport.sendMail({
         from,
         to: recipient.name
-          ? `"${recipient.name}" <${recipient.email}>`
+          ? { name: recipient.name, address: recipient.email }
           : recipient.email,
         subject,
         text,
@@ -277,13 +282,10 @@ export async function sendAttendeeDeclinedEmail(
   declinedAttendee: { name: string | null; email: string | null }
 ): Promise<void> {
   const transport = createTransport();
-  const from = process.env.GOOGLE_EMAIL
-    ? `"${"TicketFlow"}" <${process.env.GOOGLE_EMAIL}>`
-    : `"${"TicketFlow"}" <${DEFAULT_FROM_EMAIL}>`;
-
-  const { generateAttendeeDeclinedEmail } = await import(
-    "@/lib/email/templates/meeting"
-  );
+  const from = {
+    name: "TicketFlow",
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  };
 
   const { subject, html, text } = generateAttendeeDeclinedEmail(
     payload,
@@ -296,7 +298,7 @@ export async function sendAttendeeDeclinedEmail(
   await transport.sendMail({
     from,
     to: payload.host.name
-      ? `"${payload.host.name}" <${hostEmail}>`
+      ? { name: payload.host.name, address: hostEmail }
       : hostEmail,
     subject,
     text,
@@ -312,13 +314,10 @@ export async function sendMeetingReminderEmail(
   payload: MeetingEmailPayload
 ): Promise<void> {
   const transport = createTransport();
-  const from = process.env.GOOGLE_EMAIL
-    ? `"${"TicketFlow"}" <${process.env.GOOGLE_EMAIL}>`
-    : `"${"TicketFlow"}" <${DEFAULT_FROM_EMAIL}>`;
-
-  const { generateMeetingReminderEmail } = await import(
-    "@/lib/email/templates/meeting"
-  );
+  const from = {
+    name: "TicketFlow",
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  };
 
   const { subject, html, text } = generateMeetingReminderEmail(payload);
 
@@ -334,12 +333,12 @@ export async function sendMeetingReminderEmail(
 
   if (recipients.length === 0) return;
 
-  await Promise.all(
+  await Promise.allSettled(
     recipients.map(async (recipient) => {
       await transport.sendMail({
         from,
         to: recipient.name
-          ? `"${recipient.name}" <${recipient.email}>`
+          ? { name: recipient.name, address: recipient.email }
           : recipient.email,
         subject,
         text,

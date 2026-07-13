@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useGetMeetingsQuery, useUpdateMeetingMutation, useDeleteMeetingMutation } from "@/store/meetingsApi";
-import type { MeetingWithAttendees } from "@/types/meeting";
+import type { SerializedMeetingWithAttendees } from "@/store/meetingsApi";
 import { LocalTime } from "@/components/ui/LocalTime";
 import Link from "next/link";
 
@@ -11,7 +11,7 @@ import Link from "next/link";
 // Schedule Item Row
 // ---------------------------------------------------------------------------
 
-function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: number }) {
+function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees; now: number }) {
   const { data: session } = useSession();
   const [updateMeeting, { isLoading: isUpdating }] = useUpdateMeetingMutation();
   const [deleteMeeting, { isLoading: isDeleting }] = useDeleteMeetingMutation();
@@ -41,11 +41,11 @@ function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: nu
   return (
     <div className={`flex flex-col rounded-xl overflow-hidden transition-colors ${isPastEnd ? 'opacity-60' : ''}`} style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}>
       {/* Clickable Header Area */}
-      <button 
-        onClick={() => setExpanded(!expanded)}
-        className="w-full text-left p-4 flex items-center justify-between hover:bg-black/5 transition-colors"
-      >
-        <div className="flex items-center gap-4">
+      <div className="w-full flex items-center justify-between p-4 transition-colors hover:bg-black/5">
+        <button 
+          onClick={() => setExpanded(!expanded)}
+          className="flex-1 flex items-center gap-4 text-left"
+        >
           <div className="flex flex-col items-center justify-center w-14 h-14 rounded-lg shrink-0" style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
             <span className="text-xs font-bold uppercase" style={{ color: "var(--brand)" }}>
               <LocalTime date={meeting.startTime} options={{ month: "short" }} />
@@ -68,28 +68,29 @@ function ScheduleItem({ meeting, now }: { meeting: MeetingWithAttendees; now: nu
               <LocalTime date={meeting.startTime} options={{ hour: "numeric", minute: "2-digit" }} /> - <LocalTime date={meeting.endTime} options={{ hour: "numeric", minute: "2-digit" }} />
             </p>
           </div>
-        </div>
+        </button>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 shrink-0">
           {meeting.ticketId && (
             <Link 
               href={`/tickets/${meeting.ticketId}`}
-              onClick={(e) => e.stopPropagation()}
               className="text-xs font-medium px-2 py-1 rounded transition-colors hover:bg-black/5"
               style={{ color: "var(--brand)", background: "var(--brand-subtle)" }}
             >
               Ticket #{meeting.ticketId.slice(-6).toUpperCase()}
             </Link>
           )}
-          <svg 
-            width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
-            className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
-            style={{ color: "var(--text-muted)" }}
-          >
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          <button onClick={() => setExpanded(!expanded)} className="p-1">
+            <svg 
+              width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
+              className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+              style={{ color: "var(--text-muted)" }}
+            >
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Expanded Content Area */}
       {expanded && (

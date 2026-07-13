@@ -71,13 +71,16 @@ To initialize the application locally, ensure you have PostgreSQL installed and 
 | `NEXTAUTH_SECRET` | Cryptographic secret for signing NextAuth.js JWT tokens. |
 | `NEXTAUTH_URL` | Base canonical URL of the application. |
 | `CRON_SECRET` | Security bearer token to validate automated cron requests. |
+| `GOOGLE_EMAIL` | The Google Workspace email address for OAuth sending. |
 | `GOOGLE_CLIENT_ID` | OAuth2 Client ID for the Google Workspace service account. |
 | `GOOGLE_CLIENT_SECRET` | OAuth2 Client Secret for the Google Workspace service account. |
 | `GOOGLE_REFRESH_TOKEN` | Persistent OAuth2 token for silent Google Meet creation. |
+| `DEFAULT_FROM_EMAIL` | Default sender email address for system notifications. |
+| `APP_BASE_URL` | The public base URL for links in emails (e.g. http://localhost:3000). |
 | `SMTP_HOST` | Hostname for the outgoing mail server. |
 | `SMTP_PORT` | Port configuration for the mail server (typically 587 or 465). |
 | `SMTP_USER` | Authenticated username for the mail transporter. |
-| `SMTP_PASS` | Authenticated password for the mail transporter. |
+| `SMTP_PASSWORD` | Authenticated password for the mail transporter. |
 
 ## Testing & Build Verification
 

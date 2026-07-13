@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
           gte: windowStart,
           lte: windowEnd,
         },
+        reminderSentAt: null,
       },
       include: {
         createdBy: {
@@ -65,7 +66,17 @@ export async function GET(req: NextRequest) {
       // If there are no accepted/pending attendees (including the host), skip
       if (meeting.attendees.length === 0) return;
 
+      // Atomically claim the meeting
+      const claim = await prisma.meeting.updateMany({
+        where: { id: meeting.id, reminderSentAt: null },
+        data: { reminderSentAt: new Date() }
+      });
+
+      if (claim.count === 0) return; // Already claimed by another invocation
+
       const emailPayload: MeetingEmailPayload = {
+        meetingId: meeting.id,
+        sequence: Math.floor(new Date(meeting.updatedAt).getTime() / 1000),
         title: meeting.title,
         description: meeting.description ?? undefined,
         startTimeUtc: meeting.startTime.toISOString(),
@@ -88,12 +99,18 @@ export async function GET(req: NextRequest) {
           : undefined,
       };
 
-      await sendMeetingReminderEmail(emailPayload).catch((err) =>
-        console.error(`[Cron Reminders] Failed to send reminder for meeting ${meeting.id}:`, err)
-      );
+      await sendMeetingReminderEmail(emailPayload);
     });
 
-    await Promise.all(dispatchPromises);
+    const results = await Promise.allSettled(dispatchPromises);
+    const rejectedCount = results.filter((r) => r.status === "rejected").length;
+
+    if (rejectedCount > 0) {
+      return NextResponse.json(
+        { error: "Some reminders failed to send", rejectedCount },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       { message: `Successfully processed ${upcomingMeetings.length} meeting reminders.` },

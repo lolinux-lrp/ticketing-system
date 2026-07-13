@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signupSchema } from "@/lib/validations/auth";
@@ -60,11 +61,17 @@ export async function POST(req: Request) {
                         where: { identifier_token: { identifier: email, token } },
                     }),
                 ]);
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Signup transaction error:", error);
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+                    return NextResponse.json(
+                        { error: "Failed to process invite token. It may be invalid or expired." },
+                        { status: 400 }
+                    );
+                }
                 return NextResponse.json(
-                    { error: "Failed to process invite token. It may be invalid or expired." },
-                    { status: 400 }
+                    { error: "Something went wrong. Please try again." },
+                    { status: 500 }
                 );
             }
 

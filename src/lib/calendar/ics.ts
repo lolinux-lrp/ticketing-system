@@ -101,6 +101,8 @@ export function createMeetingIcsAttachment(
   }
 
   const eventAttributes: EventAttributes = {
+    uid: payload.meetingId,
+    sequence: payload.sequence ?? 0,
     title: payload.title,
     description: descriptionParts.join("\n\n") || undefined,
     start: isoToDateArray(payload.startTimeUtc),

@@ -60,6 +60,27 @@ function displayName(name: string | null, email: string | null): string {
   return name ?? email ?? "Unknown";
 }
 
+/** Escapes HTML special characters to prevent XSS. */
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/** Validates that a URL is HTTPS, returning a safe fallback otherwise. */
+function validateHttpsUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return "#";
+    return url;
+  } catch {
+    return "#";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Return type
 // ---------------------------------------------------------------------------
@@ -140,6 +161,14 @@ export function generateMeetingInvitationEmail(
     .filter((line) => line !== "")
     .join("\n");
 
+  const safeTitle = escapeHtml(title);
+  const safeSubject = escapeHtml(subject);
+  const safeDescription = description ? escapeHtml(description) : "";
+  const safeTicketTitle = ticketContext ? escapeHtml(ticketContext.ticketTitle) : "";
+  const safeTicketId = ticketContext ? escapeHtml(ticketContext.ticketId) : "";
+  const safeMeetingUrl = escapeHtml(validateHttpsUrl(meetingUrl));
+  const safeHostDisplay = escapeHtml(hostDisplay);
+
   // --- HTML body ---
   const ticketBadge = ticketContext
     ? `
@@ -154,8 +183,8 @@ export function generateMeetingInvitationEmail(
             color:${TOKEN.textSecondary};
             font-family:${TOKEN.font};
           ">
-            🎫 Linked to Ticket: <strong>${ticketContext.ticketTitle}</strong>
-            &nbsp;·&nbsp;#${ticketContext.ticketId}
+            🎫 Linked to Ticket: <strong>${safeTicketTitle}</strong>
+            &nbsp;·&nbsp;#${safeTicketId}
           </span>
         </div>`
     : "";
@@ -175,7 +204,7 @@ export function generateMeetingInvitationEmail(
           white-space:pre-line;
         ">
           <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${TOKEN.textSecondary};">Agenda</p>
-          ${description}
+          ${safeDescription}
         </div>`
     : "";
 
@@ -185,8 +214,8 @@ export function generateMeetingInvitationEmail(
           .map(
             (a) =>
               `<li style="margin:4px 0;font-size:14px;color:${TOKEN.textPrimary};font-family:${TOKEN.font};">
-                ${displayName(a.name, a.email)}
-                ${a.email ? `<span style="color:${TOKEN.textSecondary};">&lt;${a.email}&gt;</span>` : ""}
+                ${escapeHtml(displayName(a.name, a.email))}
+                ${a.email ? `<span style="color:${TOKEN.textSecondary};">&lt;${escapeHtml(a.email)}&gt;</span>` : ""}
               </li>`
           )
           .join("")
@@ -197,7 +226,7 @@ export function generateMeetingInvitationEmail(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
@@ -233,7 +262,7 @@ export function generateMeetingInvitationEmail(
 
               <!-- Meeting title -->
               <h2 style="margin:0 0 20px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">
-                ${title}
+                ${safeTitle}
               </h2>
 
               <!-- Date / time card -->
@@ -249,13 +278,13 @@ export function generateMeetingInvitationEmail(
                       <tr>
                         <td style="padding-bottom:10px;">
                           <p style="margin:0;font-family:${TOKEN.font};font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${TOKEN.textSecondary};">Start</p>
-                          <p style="margin:4px 0 0;font-family:${TOKEN.font};font-size:14px;font-weight:600;color:${TOKEN.textPrimary};">${startFormatted}</p>
+                          <p style="margin:4px 0 0;font-family:${TOKEN.font};font-size:14px;font-weight:600;color:${TOKEN.textPrimary};">${escapeHtml(startFormatted)}</p>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding-top:10px;border-top:1px solid ${TOKEN.border};">
                           <p style="margin:0;font-family:${TOKEN.font};font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${TOKEN.textSecondary};">End</p>
-                          <p style="margin:4px 0 0;font-family:${TOKEN.font};font-size:14px;font-weight:600;color:${TOKEN.textPrimary};">${endFormatted}</p>
+                          <p style="margin:4px 0 0;font-family:${TOKEN.font};font-size:14px;font-weight:600;color:${TOKEN.textPrimary};">${escapeHtml(endFormatted)}</p>
                         </td>
                       </tr>
                     </table>
@@ -265,7 +294,7 @@ export function generateMeetingInvitationEmail(
 
               <!-- Host -->
               <p style="margin:0 0 8px;font-family:${TOKEN.font};font-size:13px;color:${TOKEN.textSecondary};">
-                <strong style="color:${TOKEN.textPrimary};">Hosted by:</strong> ${hostDisplay}
+                <strong style="color:${TOKEN.textPrimary};">Hosted by:</strong> ${safeHostDisplay}
               </p>
 
               ${descriptionBlock}
@@ -280,7 +309,7 @@ export function generateMeetingInvitationEmail(
 
               <!-- CTA -->
               <div style="margin:28px 0 0;text-align:center;">
-                <a href="${meetingUrl}" style="
+                <a href="${safeMeetingUrl}" style="
                   display:inline-block;
                   background:${TOKEN.brand};
                   color:${TOKEN.white};
@@ -295,7 +324,7 @@ export function generateMeetingInvitationEmail(
                   Join Google Meet →
                 </a>
                 <p style="margin:12px 0 0;font-family:${TOKEN.font};font-size:12px;color:${TOKEN.textSecondary};">
-                  Or copy the link: <a href="${meetingUrl}" style="color:${TOKEN.brand};">${meetingUrl}</a>
+                  Or copy the link: <a href="${safeMeetingUrl}" style="color:${TOKEN.brand};">${safeMeetingUrl}</a>
                 </p>
               </div>
 
@@ -360,12 +389,16 @@ export function generateMeetingCancelledEmail(
     .filter((line) => line !== "")
     .join("\n");
 
+  const safeTitle = escapeHtml(title);
+  const safeSubject = escapeHtml(subject);
+  const safeHostDisplay = escapeHtml(hostDisplay);
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
@@ -382,15 +415,15 @@ export function generateMeetingCancelledEmail(
           </tr>
           <tr>
             <td style="padding:32px 36px;">
-              <h2 style="margin:0 0 20px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">${title}</h2>
+              <h2 style="margin:0 0 20px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">${safeTitle}</h2>
               <p style="margin:0 0 20px;font-family:${TOKEN.font};font-size:15px;color:${TOKEN.textPrimary};">
-                This meeting has been cancelled by the host (<strong>${hostDisplay}</strong>).
+                This meeting has been cancelled by the host (<strong>${safeHostDisplay}</strong>).
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background:${TOKEN.surface};border:1px solid ${TOKEN.border};border-radius:8px;margin-bottom:20px;">
                 <tr>
                   <td style="padding:16px 20px;">
                     <p style="margin:0 0 4px;font-family:${TOKEN.font};font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${TOKEN.textSecondary};">Originally Scheduled For</p>
-                    <p style="margin:0;font-family:${TOKEN.font};font-size:14px;color:${TOKEN.textPrimary};">${startFormatted} - ${endFormatted}</p>
+                    <p style="margin:0;font-family:${TOKEN.font};font-size:14px;color:${TOKEN.textPrimary};">${escapeHtml(startFormatted)} - ${escapeHtml(endFormatted)}</p>
                   </td>
                 </tr>
               </table>
@@ -431,11 +464,15 @@ export function generateAttendeeDeclinedEmail(
     .filter((line) => line !== "")
     .join("\n");
 
+  const safeTitle = escapeHtml(title);
+  const safeSubject = escapeHtml(subject);
+  const safeAttendeeDisplay = escapeHtml(attendeeDisplay);
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
@@ -452,10 +489,10 @@ export function generateAttendeeDeclinedEmail(
           <tr>
             <td style="padding:32px 36px;">
               <p style="margin:0 0 16px;font-family:${TOKEN.font};font-size:15px;color:${TOKEN.textPrimary};">
-                <strong>${attendeeDisplay}</strong> has declined your invitation to:
+                <strong>${safeAttendeeDisplay}</strong> has declined your invitation to:
               </p>
               <div style="padding:16px;background:${TOKEN.surface};border-radius:6px;border-left:3px solid #fbbf24;">
-                <p style="margin:0;font-family:${TOKEN.font};font-size:16px;font-weight:600;color:${TOKEN.textPrimary};">${title}</p>
+                <p style="margin:0;font-family:${TOKEN.font};font-size:16px;font-weight:600;color:${TOKEN.textPrimary};">${safeTitle}</p>
               </div>
             </td>
           </tr>
@@ -496,12 +533,17 @@ export function generateMeetingReminderEmail(
     .filter((line) => line !== "")
     .join("\n");
 
+  const safeTitle = escapeHtml(title);
+  const safeSubject = escapeHtml(subject);
+  const safeMeetingUrl = escapeHtml(validateHttpsUrl(meetingUrl));
+  const safeStartFormatted = escapeHtml(startFormatted);
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
@@ -518,12 +560,12 @@ export function generateMeetingReminderEmail(
           </tr>
           <tr>
             <td style="padding:32px 36px;">
-              <h2 style="margin:0 0 16px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">${title}</h2>
+              <h2 style="margin:0 0 16px;font-family:${TOKEN.font};font-size:20px;font-weight:700;color:${TOKEN.textPrimary};">${safeTitle}</h2>
               <p style="margin:0 0 24px;font-family:${TOKEN.font};font-size:15px;color:${TOKEN.textPrimary};">
-                Your meeting will begin in approximately <strong>15 minutes</strong> (${startFormatted}).
+                Your meeting will begin in approximately <strong>15 minutes</strong> (${safeStartFormatted}).
               </p>
               <div style="text-align:center;">
-                <a href="${meetingUrl}" style="display:inline-block;background:${TOKEN.brand};color:${TOKEN.white};font-family:${TOKEN.font};font-size:16px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:8px;">
+                <a href="${safeMeetingUrl}" style="display:inline-block;background:${TOKEN.brand};color:${TOKEN.white};font-family:${TOKEN.font};font-size:16px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:8px;">
                   Join Meeting Now
                 </a>
               </div>

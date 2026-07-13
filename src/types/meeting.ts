@@ -155,6 +155,10 @@ export interface MeetingTicketContext {
  * - `attendees` excludes the host; iterate both for "all participants".
  */
 export interface MeetingEmailPayload {
+  /** Stable identifier for the meeting */
+  meetingId: string;
+  /** Monotonically increasing revision number for ICS clients */
+  sequence?: number;
   /** Human-readable meeting title. */
   title: string;
   /** Optional description / agenda. */

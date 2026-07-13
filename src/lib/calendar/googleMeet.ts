@@ -24,7 +24,6 @@ export interface CreateMeetRoomParams {
   startTime: Date;
   endTime: Date;
   description?: string;
-  attendeeEmails?: string[];
 }
 
 /** The provisioned room details returned on success. */
@@ -128,9 +127,6 @@ export async function createSilentGoogleMeetRoom(
           },
         },
       },
-      ...(params.attendeeEmails?.length ? {
-        attendees: params.attendeeEmails.map(email => ({ email }))
-      } : {})
     },
   });
 
@@ -146,18 +142,32 @@ export async function createSilentGoogleMeetRoom(
     );
   }
 
+  let eventData = response.data;
+  let attempts = 0;
+
+  while (
+    attempts < 5 &&
+    eventData.conferenceData?.createRequest?.status?.statusCode === "pending"
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 1000 * (attempts + 1)));
+    const getRes = await calendar.events.get({ calendarId: "primary", eventId });
+    eventData = getRes.data;
+    attempts++;
+  }
+
   // Navigate the nullable chain to find the "video" entry point URI.
-  const entryPoints = response.data.conferenceData?.entryPoints;
+  const entryPoints = eventData.conferenceData?.entryPoints;
   const videoEntryPoint = entryPoints?.find(
     (ep) => ep.entryPointType === "video"
   );
   const meetUrl = videoEntryPoint?.uri;
 
   if (!meetUrl) {
+    await calendar.events.delete({ calendarId: "primary", eventId, sendUpdates: "none" }).catch(() => {});
     throw new Error(
       "[createSilentGoogleMeetRoom] Google Calendar API response did not include a Meet URL. " +
-        `Event was created (id: ${eventId}) but conference data is missing. ` +
-        "Ensure conferenceDataVersion=1 and the account has Google Meet access."
+        `Event was created (id: ${eventId}) but conference data is missing or pending too long. ` +
+        "Orphaned event has been cleaned up."
     );
   }
 

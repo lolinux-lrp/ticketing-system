@@ -5,13 +5,14 @@ import { useSession } from "next-auth/react";
 import { useGetMeetingsQuery, useUpdateMeetingMutation } from "@/store/meetingsApi";
 import { ScheduleMeetingModal } from "@/components/meetings/ScheduleMeetingModal";
 import { LocalTime } from "@/components/ui/LocalTime";
-import type { MeetingWithAttendees, AttendeeStatusValue } from "@/types/meeting";
+import type { AttendeeStatusValue } from "@/types/meeting";
+import type { SerializedMeetingWithAttendees } from "@/store/meetingsApi";
 
 // ---------------------------------------------------------------------------
 // Single Meeting Item Row
 // ---------------------------------------------------------------------------
 
-function MeetingItem({ meeting, now }: { meeting: MeetingWithAttendees; now: number }) {
+function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees; now: number }) {
   const { data: session } = useSession();
   const [updateMeeting, { isLoading }] = useUpdateMeetingMutation();
 
@@ -133,6 +134,7 @@ export function TicketMeetingsCard({
   customerUserId?: string;
   agentUserId?: string | null;
 }) {
+  const { data: session } = useSession();
   const { data, isLoading } = useGetMeetingsQuery();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [now, setNow] = useState<number | null>(null);
@@ -147,15 +149,20 @@ export function TicketMeetingsCard({
   // Filter meetings for this specific ticket
   const ticketMeetings = data?.data?.filter((m) => m.ticketId === ticketId) || [];
   
-  // Sort: upcoming first, past at the bottom
-  const sortedMeetings = [...ticketMeetings].sort((a, b) => {
-    return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-  });
+  // Sort: partition by whether endTime is <= now
+  const upcoming = ticketMeetings
+    .filter((m) => new Date(m.endTime).getTime() > (now ?? 0))
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  
+  const past = ticketMeetings
+    .filter((m) => new Date(m.endTime).getTime() <= (now ?? 0))
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-  // Decide who to invite automatically (the other party)
-  const defaultAttendees = [];
-  if (customerUserId) defaultAttendees.push(customerUserId);
-  if (agentUserId) defaultAttendees.push(agentUserId);
+  const sortedMeetings = [...upcoming, ...past];
+
+  // Decide who to invite automatically (excluding myself, and deduplicating)
+  const defaultAttendees = Array.from(new Set([customerUserId, agentUserId]))
+    .filter((id): id is string => Boolean(id) && id !== session?.user?.id);
 
   return (
     <>

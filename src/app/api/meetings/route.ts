@@ -102,6 +102,25 @@ export async function POST(req: NextRequest) {
     // Always use the session user as the host — never trust a client-supplied createdById
     const createdById = session.user.id;
 
+    // --- Authorize ticketId ---
+    if (ticketId) {
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: { createdById: true, assignedToId: true }
+      });
+
+      if (!ticket) {
+        return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+      }
+
+      if (session.user.role === "CUSTOMER" && ticket.createdById !== session.user.id) {
+        return NextResponse.json({ error: "Forbidden: Not authorized to link this ticket" }, { status: 403 });
+      }
+      if (session.user.role === "AGENT" && ticket.assignedToId !== session.user.id) {
+        return NextResponse.json({ error: "Forbidden: Not authorized to link this ticket" }, { status: 403 });
+      }
+    }
+
     // -----------------------------------------------------------------------
     // CONFLICT ENGINE — Double-booking prevention
     // An overlap exists when:  ExistingStart < NewEnd  AND  ExistingEnd > NewStart
@@ -112,42 +131,6 @@ export async function POST(req: NextRequest) {
     // Combine attendeeIds and teammateIds
     const combinedInvitees = [...attendeeIds, ...(teammateIds || [])];
     const allParticipantIds = [createdById, ...combinedInvitees];
-
-    const conflictingMeeting = await prisma.meeting.findFirst({
-      where: {
-        attendees: {
-          some: {
-            userId: { in: allParticipantIds },
-            status: { in: ["ACCEPTED", "PENDING"] },
-          },
-        },
-        startTime: { lt: endDate },   // ExistingStart < NewEnd
-        endTime:   { gt: startDate }, // ExistingEnd   > NewStart
-      },
-      select: { id: true, title: true, startTime: true, endTime: true },
-    });
-
-    if (conflictingMeeting) {
-      return NextResponse.json(
-        {
-          error: `Scheduling conflict: a participant already has an accepted or pending meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
-          conflict: {
-            meetingId: conflictingMeeting.id,
-            startTime: conflictingMeeting.startTime.toISOString(),
-            endTime:   conflictingMeeting.endTime.toISOString(),
-          },
-        },
-        { status: 409 }
-      );
-    }
-
-    // Fetch attendee emails to pass to Google Calendar API
-    const participants = await prisma.user.findMany({
-      where: { id: { in: allParticipantIds } },
-      select: { email: true }
-    });
-    const attendeeEmails = participants.flatMap(p => p.email ? [p.email] : []);
-
     // -----------------------------------------------------------------------
     // Step 1: Provision the Google Meet room silently (no Google emails sent)
     // -----------------------------------------------------------------------
@@ -157,7 +140,6 @@ export async function POST(req: NextRequest) {
         startTime: startDate,
         endTime: endDate,
         description,
-        attendeeEmails,
       });
 
     // -----------------------------------------------------------------------
@@ -175,22 +157,73 @@ export async function POST(req: NextRequest) {
       })),
     ];
 
-    const newMeeting = await prisma.meeting.create({
-      data: {
-        title,
-        description,
-        startTime: startDate,
-        endTime: endDate,
-        meetingUrl: meetUrl,
-        externalGoogleEventId,
-        ...(ticketId ? { ticketId } : {}),
-        createdById,
-        attendees: {
-          create: attendeeCreateData,
-        },
-      },
-      include: MEETING_INCLUDE,
-    });
+    let newMeeting: MeetingWithAttendees;
+
+    try {
+      newMeeting = await prisma.$transaction(async (tx) => {
+        // Run the conflict check inside the transaction with serializable isolation (handled by Prisma defaults or retries)
+        const conflictingMeeting = await tx.meeting.findFirst({
+          where: {
+            attendees: {
+              some: {
+                userId: { in: allParticipantIds },
+                status: { in: ["ACCEPTED", "PENDING"] },
+              },
+            },
+            startTime: { lt: endDate },
+            endTime:   { gt: startDate },
+          },
+          select: { id: true, title: true, startTime: true, endTime: true },
+        });
+
+        if (conflictingMeeting) {
+          throw new Error(JSON.stringify({
+            code: 409,
+            error: `Scheduling conflict: a participant already has an accepted or pending meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
+            conflict: {
+              meetingId: conflictingMeeting.id,
+              startTime: conflictingMeeting.startTime.toISOString(),
+              endTime:   conflictingMeeting.endTime.toISOString(),
+            },
+          }));
+        }
+
+        return tx.meeting.create({
+          data: {
+            title,
+            description,
+            startTime: startDate,
+            endTime: endDate,
+            meetingUrl: meetUrl,
+            externalGoogleEventId,
+            ...(ticketId ? { ticketId } : {}),
+            createdById,
+            attendees: {
+              create: attendeeCreateData,
+            },
+          },
+          include: MEETING_INCLUDE,
+        });
+      }, {
+        isolationLevel: 'Serializable'
+      });
+    } catch (error: unknown) {
+      if (externalGoogleEventId) {
+        const { deleteGoogleMeetRoom } = await import("@/lib/calendar/googleMeet");
+        await deleteGoogleMeetRoom(externalGoogleEventId).catch(err => console.error("Failed to delete orphaned Google Meet event:", err));
+      }
+      try {
+        if (error instanceof Error) {
+          const parsed = JSON.parse(error.message);
+          if (parsed.code === 409) {
+            return NextResponse.json({ error: parsed.error, conflict: parsed.conflict }, { status: 409 });
+          }
+        }
+      } catch {
+        // Not our custom JSON error
+      }
+      throw error;
+    }
 
     // -----------------------------------------------------------------------
     // Step 3: Fetch ticket context (if linked) and dispatch invitation emails
@@ -208,6 +241,8 @@ export async function POST(req: NextRequest) {
     }
 
     const emailPayload: MeetingEmailPayload = {
+      meetingId: newMeeting.id,
+      sequence: Math.floor(new Date(newMeeting.updatedAt).getTime() / 1000),
       title: newMeeting.title,
       description: newMeeting.description ?? undefined,
       startTimeUtc: newMeeting.startTime.toISOString(),
