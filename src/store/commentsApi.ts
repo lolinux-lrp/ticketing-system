@@ -29,7 +29,9 @@ export const commentsApi = createApi({
           await queryFulfilled;
           const { ticketsApi } = await import("@/store/ticketsApi");
           dispatch(ticketsApi.util.invalidateTags([{ type: "Ticket", id: arg.ticketId }]));
-        } catch {}
+        } catch (error) {
+          console.error("[commentsApi.createComment] Failed to invalidate ticket cache:", error);
+        }
       }
     }),
 
@@ -47,7 +49,9 @@ export const commentsApi = createApi({
           await queryFulfilled;
           const { ticketsApi } = await import("@/store/ticketsApi");
           dispatch(ticketsApi.util.invalidateTags([{ type: "Ticket", id: arg.ticketId }]));
-        } catch {}
+        } catch (error) {
+          console.error("[commentsApi.deleteComment] Failed to invalidate ticket cache:", error);
+        }
       }
     }),
   }),

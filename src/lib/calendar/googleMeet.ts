@@ -163,11 +163,20 @@ export async function createSilentGoogleMeetRoom(
   const meetUrl = videoEntryPoint?.uri;
 
   if (!meetUrl) {
-    await calendar.events.delete({ calendarId: "primary", eventId, sendUpdates: "none" }).catch(() => {});
+    let cleanupSucceeded = false;
+    try {
+      await calendar.events.delete({ calendarId: "primary", eventId, sendUpdates: "none" });
+      cleanupSucceeded = true;
+    } catch (deleteError) {
+      // Capture cleanup failure but continue to throw the primary error
+    }
+
     throw new Error(
       "[createSilentGoogleMeetRoom] Google Calendar API response did not include a Meet URL. " +
         `Event was created (id: ${eventId}) but conference data is missing or pending too long. ` +
-        "Orphaned event has been cleaned up."
+        (cleanupSucceeded
+          ? "Orphaned event has been cleaned up."
+          : "Failed to clean up orphaned event.")
     );
   }
 

@@ -17,9 +17,10 @@ interface TimeSelectProps {
   hour: string; setHour: (v: string) => void;
   minute: string; setMinute: (v: string) => void;
   period: string; setPeriod: (v: string) => void;
+  fieldName: string;
 }
 
-function TimeSelect({ hour, setHour, minute, setMinute, period, setPeriod }: TimeSelectProps) {
+function TimeSelect({ hour, setHour, minute, setMinute, period, setPeriod, fieldName }: TimeSelectProps) {
   return (
     <div className="flex gap-2">
       <input
@@ -31,6 +32,7 @@ function TimeSelect({ hour, setHour, minute, setMinute, period, setPeriod }: Tim
         onChange={(e) => setHour(e.target.value)}
         className="input-base w-16 text-center [&::-webkit-inner-spin-button]:appearance-none"
         placeholder="12"
+        aria-label={`${fieldName} hour`}
       />
       <span className="self-center font-bold" style={{ color: "var(--text-muted)" }}>:</span>
       <input
@@ -43,11 +45,13 @@ function TimeSelect({ hour, setHour, minute, setMinute, period, setPeriod }: Tim
         onChange={(e) => setMinute(e.target.value)}
         className="input-base w-16 text-center"
         placeholder="00"
+        aria-label={`${fieldName} minute`}
       />
       <select
         value={period}
         onChange={(e) => setPeriod(e.target.value)}
         className="input-base w-20 px-2"
+        aria-label={`${fieldName} period`}
       >
         <option value="AM">AM</option>
         <option value="PM">PM</option>
@@ -96,14 +100,12 @@ export function ScheduleMeetingModal({
 
   const filteredAgents = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    return agents.filter(a => 
+    return agents.filter(a =>
       !defaultAttendeeIds.includes(a.id) &&
       !selectedTeammateIds.includes(a.id) &&
       ((a.name || "").toLowerCase().includes(query) || (a.email || "").toLowerCase().includes(query))
     );
   }, [agents, defaultAttendeeIds, selectedTeammateIds, searchQuery]);
-
-  if (!isOpen) return null;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -114,6 +116,8 @@ export function ScheduleMeetingModal({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
 
   const buildTimeString = (hStr: string, mStr: string, period: string) => {
     let h = parseInt(hStr || "0", 10);
@@ -248,9 +252,10 @@ export function ScheduleMeetingModal({
                 hour={startHour} setHour={setStartHour}
                 minute={startMinute} setMinute={setStartMinute}
                 period={startPeriod} setPeriod={setStartPeriod}
+                fieldName="Start time"
               />
             </div>
-            
+
             <div className="flex-1">
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                 End Time
@@ -259,6 +264,7 @@ export function ScheduleMeetingModal({
                 hour={endHour} setHour={setEndHour}
                 minute={endMinute} setMinute={setEndMinute}
                 period={endPeriod} setPeriod={setEndPeriod}
+                fieldName="End time"
               />
             </div>
           </div>
