@@ -23,7 +23,7 @@ export function TicketsDashboard() {
     isFetching,
     isError,
     error,
-  } = useGetTicketsQuery(apiFilters, { pollingInterval: 15000, skipPollingIfUnfocused: true });
+  } = useGetTicketsQuery(apiFilters, { pollingInterval: 120000, skipPollingIfUnfocused: true });
 
   const hasActiveFilters = Boolean(
     filters.status || filters.priority || filters.search || filters.mine
