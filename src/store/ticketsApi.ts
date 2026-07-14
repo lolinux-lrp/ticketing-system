@@ -1,12 +1,22 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
-  TicketUser,
   CreateTicketPayload,
   DeleteTicketResponse,
   GetTicketsParams,
   Ticket,
   UpdateTicketPayload,
 } from "@/types";
+
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface GetProjectsResponse {
+  data: Project[];
+}
 
 interface GetTicketsResponse {
   data: Ticket[];
@@ -68,6 +78,10 @@ export const ticketsApi = createApi({
       query: (id) => `tickets/${id}`,
       providesTags: (result, error, id) => [{ type: "Ticket", id }],
     }),
+    getProjects: builder.query<Project[], void>({
+      query: () => "projects",
+      transformResponse: (response: GetProjectsResponse) => response.data,
+    }),
   }),
 });
 
@@ -77,4 +91,5 @@ export const {
   useCreateTicketMutation,
   useUpdateTicketMutation,
   useDeleteTicketMutation,
+  useGetProjectsQuery,
 } = ticketsApi;

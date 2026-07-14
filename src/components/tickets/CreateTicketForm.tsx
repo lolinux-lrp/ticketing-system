@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { useCreateTicketMutation } from "@/store/ticketsApi";
+import { useCreateTicketMutation, useGetProjectsQuery } from "@/store/ticketsApi";
 import type { Priority } from "@/types";
 import { extractErrorMessage } from "./extractErrorMessage";
 
@@ -24,6 +24,8 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("MEDIUM");
+  const [projectId, setProjectId] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -39,6 +41,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
     setWasOpen(isOpen);
     if (isOpen) {
       setTitle(""); setDescription(""); setPriority("MEDIUM");
+      setProjectId(""); setContactEmail("");
       setFormError(null); setSuccess(false);
     }
   }
@@ -59,8 +62,11 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
         description,
         priority,
         createdById: session.user.id,
+        projectId: projectId || undefined,
+        contactEmail: contactEmail || undefined,
       }).unwrap();
       setTitle(""); setDescription(""); setPriority("MEDIUM");
+      setProjectId(""); setContactEmail("");
       setSuccess(true);
       setTimeout(() => { setSuccess(false); onClose(); }, 1200);
     } catch (err) {
@@ -181,6 +187,35 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
             </div>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="ct-project"
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Project
+            </label>
+            <ProjectSelect projectId={projectId} setProjectId={setProjectId} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="ct-contact-email"
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Contact Email
+            </label>
+            <input
+              id="ct-contact-email"
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              className="input-base"
+              placeholder="example@example.com (optional)"
+            />
+          </div>
+
           {formError && (
             <div
               className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm"
@@ -231,6 +266,27 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
       </div>
     </>,
     document.body
+  );
+}
+
+function ProjectSelect({ projectId, setProjectId }: { projectId: string; setProjectId: (id: string) => void }) {
+  const { data: projects, isLoading } = useGetProjectsQuery();
+
+  return (
+    <select
+      id="ct-project"
+      value={projectId}
+      onChange={(e) => setProjectId(e.target.value)}
+      className="input-base cursor-pointer"
+      disabled={isLoading}
+    >
+      <option value="">Select a project (optional)</option>
+      {projects?.map((project) => (
+        <option key={project.id} value={project.id}>
+          {project.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

@@ -8,9 +8,6 @@ import { LocalTime } from "@/components/ui/LocalTime";
 import type { AttendeeStatusValue } from "@/types/meeting";
 import type { SerializedMeetingWithAttendees } from "@/store/meetingsApi";
 
-// ---------------------------------------------------------------------------
-// Single Meeting Item Row
-// ---------------------------------------------------------------------------
 
 function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees; now: number }) {
   const { data: session } = useSession();
@@ -119,9 +116,6 @@ function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees
   );
 }
 
-// ---------------------------------------------------------------------------
-// Card Container
-// ---------------------------------------------------------------------------
 
 export function TicketMeetingsCard({ 
   ticketId, 
@@ -160,7 +154,6 @@ export function TicketMeetingsCard({
 
   const sortedMeetings = [...upcoming, ...past];
 
-  // Decide who to invite automatically (excluding myself, and deduplicating)
   const defaultAttendees = Array.from(new Set([customerUserId, agentUserId]))
     .filter((id): id is string => Boolean(id) && id !== session?.user?.id);
 

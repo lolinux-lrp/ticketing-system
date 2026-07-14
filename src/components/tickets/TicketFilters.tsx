@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Priority, Status } from "@/types";
 import type { TicketFiltersState } from "./useTicketFilters";
+import { useGetProjectsQuery } from "@/store/ticketsApi";
 
 const STATUS_OPTIONS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const PRIORITY_OPTIONS: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -55,6 +56,7 @@ export function TicketFilters({
   onChange,
   showMineToggle,
 }: TicketFiltersProps) {
+  const { data: projects } = useGetProjectsQuery();
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
 
   const [syncedSearch, setSyncedSearch] = useState(filters.search);
@@ -70,8 +72,7 @@ export function TicketFilters({
       }
     }, 400);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
+  }, [searchInput, filters, onChange]);
 
   const hasActive = Boolean(
     filters.status || filters.priority || filters.search || filters.mine
@@ -176,6 +177,19 @@ export function TicketFilters({
       )}
 
       <div className="ml-auto flex items-center gap-2">
+        <select
+          value={filters.projectId ?? ""}
+          onChange={(e) => onChange({ ...filters, projectId: e.target.value || undefined })}
+          className="input-base"
+          style={{ padding: "5px 8px", fontSize: "12px", width: "auto" }}
+        >
+          <option value="">All Projects</option>
+          {projects?.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
         <select
           value={filters.sortBy ?? "createdAt"}
           onChange={(e) => onChange({ ...filters, sortBy: e.target.value })}

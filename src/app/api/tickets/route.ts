@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createTicketSchema, getTicketSchema } from "@/lib/validations/tickets";
+import { sendNewTicketNotification } from "@/lib/email";
 import { can } from "@/lib/auth/policy";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const { description, title } = validation.data;
+    const { description, title, projectId, contactEmail } = validation.data;
 
     // Always use the logged-in user's ID — never trust a createdById from the client
     const newTicket = await prisma.ticket.create({
@@ -36,8 +37,22 @@ export async function POST(req: NextRequest) {
         createdById: session.user.id,
         description,
         title,
+        projectId,
+        contactEmail,
       },
+      include: {
+        project: true,
+      }
     });
+
+    if (newTicket.contactEmail) {
+      sendNewTicketNotification({
+        to: newTicket.contactEmail,
+        ticketTitle: newTicket.title,
+        projectName: newTicket.project?.name || "Unknown Project",
+        ticketId: newTicket.id,
+      }).catch(err => console.error("Failed to send new ticket email:", err));
+    }
 
     return NextResponse.json({ ticket: newTicket }, { status: 201 });
   } catch (error) {
@@ -66,7 +81,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { search, status, priority, createdById, sortBy, order } =
+    const { search, status, priority, createdById, projectId, sortBy, order } =
       validation.data;
 
     if (search) {
@@ -80,6 +95,7 @@ export async function GET(req: NextRequest) {
           ],
           ...(status ? { status } : {}),
           ...(priority ? { priority } : {}),
+          ...(projectId ? { projectId } : {}),
           ...(isCustomer ? { createdById: session.user.id } : {}),
         },
         orderBy: { createdAt: "desc" },
@@ -88,7 +104,7 @@ export async function GET(req: NextRequest) {
           id: true,
           title: true,
           description: true,
-          workDone: true,
+          resolution: true,
           status: true,
           priority: true,
           createdAt: true,
@@ -97,6 +113,7 @@ export async function GET(req: NextRequest) {
           createdById: true,
           assignedTo: { select: { id: true, name: true, role: true } },
           createdBy: { select: { id: true, name: true, role: true } },
+          project: { select: { id: true, name: true } },
         },
       });
 
@@ -108,6 +125,7 @@ export async function GET(req: NextRequest) {
       status,
       priority,
       createdById,
+      projectId,
     };
 
     if (!can(session.user, "ticket:view")) {
@@ -121,7 +139,7 @@ export async function GET(req: NextRequest) {
         id: true,
         title: true,
         description: true,
-        workDone: true,
+        resolution: true,
         status: true,
         priority: true,
         createdAt: true,
@@ -130,6 +148,7 @@ export async function GET(req: NextRequest) {
         createdById: true,
         assignedTo: { select: { id: true, name: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },
+        project: { select: { id: true, name: true } },
       },
     });
 

@@ -10,6 +10,7 @@ export interface TicketFiltersState {
   search?: string;
   sortBy?: string;
   order?: "asc" | "desc";
+  projectId?: string;
   /**
    * Client-only UI toggle. Resolved to a real `createdById` value (from the
    * current session) before being sent to the backend - see TicketsDashboard.
@@ -45,6 +46,7 @@ export function useTicketFilters() {
     const sortBy = searchParams.get("sortBy");
     const order = searchParams.get("order");
     const mine = searchParams.get("mine");
+    const projectId = searchParams.get("projectId");
 
     return {
       status: VALID_STATUS.includes(status as Status)
@@ -57,6 +59,7 @@ export function useTicketFilters() {
       sortBy:
         sortBy && VALID_SORT_FIELDS.includes(sortBy) ? sortBy : "createdAt",
       order: order === "asc" ? "asc" : "desc",
+      projectId: projectId || undefined,
       mine: mine === "true",
     };
   }, [searchParams]);
@@ -73,6 +76,7 @@ export function useTicketFilters() {
       if (next.order && next.order !== "desc") {
         params.set("order", next.order);
       }
+      if (next.projectId) params.set("projectId", next.projectId);
       if (next.mine) params.set("mine", "true");
 
       const queryString = params.toString();

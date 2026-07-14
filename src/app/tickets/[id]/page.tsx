@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -14,7 +14,7 @@ import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
 import { StatusBadge } from "@/components/tickets/StatusBadge";
 import { PriorityBadge } from "@/components/tickets/PriorityBadge";
 import { TicketMeetingsCard } from "@/components/tickets/TicketMeetingsCard";
-import type { Status, Priority } from "@/types";
+import type { Status, Priority, Ticket } from "@/types";
 
 const statusOptions: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const priorityOptions: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -157,23 +157,12 @@ export default function TicketDetailPage() {
             </p>
           </div>
 
-          {ticket.workDone && (
-            <div
-              className="rounded-xl p-5 mb-4"
-              style={{
-                background: "rgba(99,102,241,0.04)",
-                border: "1px solid rgba(99,102,241,0.15)",
-              }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--brand)" }}>
-                Agent Progress
-              </p>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
-                {ticket.workDone}
-              </p>
-            </div>
-          )}
-
+          <ResolutionSection 
+            ticket={ticket} 
+            updateTicket={updateTicket} 
+            canManage={canManage} 
+            ticketId={ticketId} 
+          />
           <div
             className="rounded-xl p-5"
             style={{
@@ -310,6 +299,20 @@ export default function TicketDetailPage() {
                 <span style={{ color: "var(--text-muted)" }}>Unassigned</span>
               )}
             />
+            {ticket.project && (
+              <MetaRow label="Project" value={
+                <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
+                  {ticket.project.name}
+                </span>
+              } />
+            )}
+            {ticket.contactEmail && (
+              <MetaRow label="Contact Email" value={
+                <a href={`mailto:${ticket.contactEmail}`} className="text-blue-500 hover:underline">
+                  {ticket.contactEmail}
+                </a>
+              } />
+            )}
             <div className="h-px" style={{ background: "var(--border)" }} />
             <MetaRow
               label="Created"
@@ -333,6 +336,74 @@ export default function TicketDetailPage() {
           />
         </div>
       </div>
+    </div>
+  );
+}
+function ResolutionSection({ ticket, updateTicket, canManage, ticketId }: { ticket: Ticket, updateTicket: (arg: { id: string, body: { resolution: string } }) => { unwrap: () => Promise<Ticket> }, canManage: boolean, ticketId: string }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(ticket.resolution || "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateTicket({ id: ticketId, body: { resolution: draft } }).unwrap();
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Failed to save resolution", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!canManage && !ticket.resolution) {
+    return (
+      <div className="rounded-xl p-5 mb-4" style={{ background: "rgba(99,102,241,0.04)", border: "1px solid rgba(99,102,241,0.15)" }}>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--brand)" }}>Resolution Notes</p>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap italic opacity-50" style={{ color: "var(--text-secondary)" }}>
+          No resolution recorded yet.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl p-5 mb-4" style={{ background: "rgba(99,102,241,0.04)", border: "1px solid rgba(99,102,241,0.15)" }}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--brand)" }}>
+          Resolution Notes
+        </p>
+        {canManage && !isEditing && (
+          <button onClick={() => { setDraft(ticket.resolution || ""); setIsEditing(true); }} className="text-xs font-medium hover:underline transition-colors" style={{ color: "var(--brand)" }}>
+            Edit
+          </button>
+        )}
+      </div>
+      
+      {isEditing ? (
+        <div className="flex flex-col gap-3">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="input-base w-full resize-y min-h-[100px]"
+            placeholder="Enter resolution notes..."
+            disabled={isSaving}
+          />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setIsEditing(false)} disabled={isSaving} className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors" style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors" style={{ background: "var(--brand)" }}>
+              {isSaving && <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {isSaving ? "Saving..." : "Save Resolution"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+          {ticket.resolution || <span className="italic opacity-50">No resolution recorded yet.</span>}
+        </p>
+      )}
     </div>
   );
 }

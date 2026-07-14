@@ -86,6 +86,14 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model Project {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tickets   Ticket[]
+}
+
 model Ticket {
   id           String                     @id @default(uuid())
   title        String
@@ -96,9 +104,12 @@ model Ticket {
   createdById  String
   assignedTo   User?                      @relation("AssignedTickets", fields: [assignedToId], references: [id])
   assignedToId String?
+  project      Project?                   @relation(fields: [projectId], references: [id])
+  projectId    String?
+  contactEmail String?
   comments     Comment[]
   meetings     Meeting[]
-  workDone     String?
+  resolution   String?
   createdAt    DateTime                   @default(now())
   updatedAt    DateTime                   @updatedAt
   searchVector Unsupported("tsvector")?

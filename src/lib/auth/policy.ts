@@ -55,7 +55,7 @@ export function can(user: SessionUser, action: Action, resource?: TicketResource
       return !!resource && "createdById" in resource && resource.createdById === user.id;
 
     case "ticket:update_workflow":
-      // Workflow updates (status, priority, workDone) are reserved for Agents and Admins
+      // Workflow updates (status, priority, resolution) are reserved for Agents and Admins
       return role === "ADMIN" || role === "AGENT";
 
     case "ticket:assign":

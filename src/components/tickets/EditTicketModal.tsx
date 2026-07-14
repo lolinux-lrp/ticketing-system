@@ -17,7 +17,7 @@ interface EditTicketModalProps {
 export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProps) {
   const [title, setTitle] = useState(ticket.title);
   const [description, setDescription] = useState(ticket.description || "");
-  const [workDone, setWorkDone] = useState(ticket.workDone || "");
+  const [resolution, setResolution] = useState(ticket.resolution || "");
   const [formError, setFormError] = useState<string | null>(null);
   const [updateTicket, { isLoading }] = useUpdateTicketMutation();
   const { data: session } = useSession();
@@ -28,7 +28,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
     if (isOpen) {
       setTitle(ticket.title);
       setDescription(ticket.description || "");
-      setWorkDone(ticket.workDone || "");
+      setResolution(ticket.resolution || "");
       setFormError(null);
     }
   }
@@ -49,7 +49,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
       const body: UpdateTicketPayload = {};
       if (title !== ticket.title) body.title = title;
       if (description !== (ticket.description || "")) body.description = description;
-      if (workDone !== (ticket.workDone || "")) body.workDone = workDone;
+      if (resolution !== (ticket.resolution || "")) body.resolution = resolution;
 
       await updateTicket({ id: ticket.id, body }).unwrap();
       onClose();
@@ -59,7 +59,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
   }
 
   const isOwner = session?.user?.id === ticket.createdById;
-  const canEditWorkDone = session?.user?.role === "AGENT" || session?.user?.role === "ADMIN";
+  const canEditResolution = session?.user?.role === "AGENT" || session?.user?.role === "ADMIN";
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
@@ -151,16 +151,16 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
             </div>
           )}
 
-          {canEditWorkDone && (
+          {canEditResolution && (
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="edit-work-done" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                Agent Progress
+              <label htmlFor="edit-resolution" className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Resolution
               </label>
               <textarea
-                id="edit-work-done"
-                value={workDone}
-                onChange={(e) => setWorkDone(e.target.value)}
-                placeholder="Describe the progress or work done so far..."
+                id="edit-resolution"
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                placeholder="Describe the steps taken to resolve..."
                 rows={3}
                 className="input-base"
                 style={{ resize: "vertical" }}

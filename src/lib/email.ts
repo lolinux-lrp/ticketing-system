@@ -142,6 +142,45 @@ export async function sendTicketAssignmentEmail({
 
 }
 
+interface NewTicketNotificationOptions {
+  to: string;
+  ticketTitle: string;
+  projectName: string;
+  ticketId: string;
+}
+
+export async function sendNewTicketNotification({
+  to,
+  ticketTitle,
+  projectName,
+  ticketId,
+}: NewTicketNotificationOptions) {
+  const transport = createTransport();
+  const ticketUrl = `${APP_BASE_URL}/tickets/${ticketId}`;
+  const from = {
+    name: "TicketFlow",
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  };
+
+  await transport.sendMail({
+    to,
+    from,
+    subject: `New Ticket Created: ${ticketTitle}`,
+    text: `Your ticket "${ticketTitle}" has been successfully created for project ${projectName}.\n\nView it here: ${ticketUrl}\n\n— TicketFlow`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
+        <h2 style="color: ${EMAIL_CONFIG.brandColor};">Ticket Created</h2>
+        <p>Your ticket has been successfully created for project <strong>${projectName}</strong>.</p>
+        <div style="background:${EMAIL_CONFIG.backgroundColor};border-left:4px solid ${EMAIL_CONFIG.brandColor};padding:12px 16px;border-radius:4px;margin:16px 0;">
+          <strong>${ticketTitle}</strong>
+        </div>
+        <a href="${ticketUrl}" style="display:inline-block;background:${EMAIL_CONFIG.brandColor};color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View Ticket</a>
+        <p style="margin-top:24px;color:#888;font-size:12px;">— TicketFlow</p>
+      </div>
+    `,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Meeting invitation email
 // ---------------------------------------------------------------------------

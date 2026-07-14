@@ -9,14 +9,16 @@ export interface TicketUser {
   email?: string;
 }
 
-export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "workDone" | "searchVector"> {
+export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "resolution" | "contactEmail" | "searchVector"> {
   description?: string;
-  workDone?: string | null;
+  resolution: string | null;
   searchVector?: unknown;
   createdAt: string;
   updatedAt: string;
   createdBy: TicketUser;
   assignedTo: TicketUser | null;
+  project?: { id: string; name: string } | null;
+  contactEmail?: string | null;
 }
 
 export interface GetTicketsParams {
@@ -24,6 +26,7 @@ export interface GetTicketsParams {
   priority?: Priority;
   search?: string;
   createdById?: string;
+  projectId?: string;
   sortBy?: string;
   order?: "asc" | "desc";
 }
@@ -33,6 +36,8 @@ export interface CreateTicketPayload {
   description: string;
   priority?: Priority;
   createdById: string;
+  projectId?: string;
+  contactEmail?: string | null;
 }
 
 export interface UpdateTicketPayload {
@@ -41,7 +46,7 @@ export interface UpdateTicketPayload {
   status?: Status;
   priority?: Priority;
   assignedToId?: string | null;
-  workDone?: string;
+  resolution?: string;
 }
 
 export interface DeleteTicketResponse {

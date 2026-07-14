@@ -167,7 +167,7 @@ export async function createSilentGoogleMeetRoom(
     try {
       await calendar.events.delete({ calendarId: "primary", eventId, sendUpdates: "none" });
       cleanupSucceeded = true;
-    } catch (deleteError) {
+    } catch {
       // Capture cleanup failure but continue to throw the primary error
     }
 

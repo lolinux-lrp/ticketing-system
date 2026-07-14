@@ -70,7 +70,7 @@ export function ScheduleMeetingModal({
 }: ScheduleMeetingModalProps) {
   const [createMeeting, { isLoading }] = useCreateMeetingMutation();
   const { data: agentsData } = useGetAgentsQuery(undefined, { skip: !isOpen });
-  const agents = agentsData || [];
+  const agents = useMemo(() => agentsData || [], [agentsData]);
 
   const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState("");

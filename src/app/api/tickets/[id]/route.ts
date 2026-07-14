@@ -23,6 +23,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       include: {
         assignedTo: { select: { id: true, name: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },
+        project: true,
       },
     });
 
@@ -82,7 +83,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    if (data.status !== undefined || data.priority !== undefined || data.workDone !== undefined) {
+    if (data.status !== undefined || data.priority !== undefined || data.resolution !== undefined) {
       if (!can(session.user, "ticket:update_workflow", existingTicket)) {
         return NextResponse.json({ error: "Forbidden: Cannot update status, priority, or work progress" }, { status: 403 });
       }
