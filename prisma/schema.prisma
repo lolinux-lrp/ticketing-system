@@ -120,6 +120,7 @@ model Ticket {
   @@index([createdAt])
   @@index([status, createdAt])
   @@index([priority, createdAt])
+  @@index([projectId])
 }
 
 model Comment {

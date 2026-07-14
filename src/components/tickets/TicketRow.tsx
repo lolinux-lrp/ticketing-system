@@ -89,21 +89,26 @@ export function TicketRow({ ticket }: TicketRowProps) {
           #{shortId(ticket.id)}
         </td>
 
-        {/* Title + description */}
+        {/* Title + Project Badge */}
         <td className="px-3 py-3 min-w-0">
-          <Link
-            href={`/tickets/${ticket.id}`}
-            className="font-medium text-sm leading-snug hover:underline line-clamp-1 block"
-            style={{ color: "var(--text-primary)" }}
-          >
-            {ticket.title}
-          </Link>
-          <p
-            className="text-xs mt-0.5 line-clamp-1"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {ticket.description}
-          </p>
+          <div className="flex items-center gap-2 mb-1">
+            <Link
+              href={`/tickets/${ticket.id}`}
+              className="font-medium text-sm leading-snug hover:underline line-clamp-1 block"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {ticket.title}
+            </Link>
+            {ticket.project ? (
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:ring-indigo-800 whitespace-nowrap">
+                {ticket.project.name}
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 whitespace-nowrap">
+                General
+              </span>
+            )}
+          </div>
           {(updateError || deleteError) && (
             <p className="text-[11px] text-red-500 mt-1">
               {updateError || deleteError}

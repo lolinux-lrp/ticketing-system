@@ -103,8 +103,6 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           title: true,
-          description: true,
-          resolution: true,
           status: true,
           priority: true,
           createdAt: true,
@@ -135,11 +133,10 @@ export async function GET(req: NextRequest) {
     const tickets = await prisma.ticket.findMany({
       where,
       orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
+      take: 50,
       select: {
         id: true,
         title: true,
-        description: true,
-        resolution: true,
         status: true,
         priority: true,
         createdAt: true,
