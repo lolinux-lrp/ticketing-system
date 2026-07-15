@@ -27,6 +27,8 @@ export const getTicketSchema = z.object({
   projectId: z.string().uuid("Invalid Project ID").optional(),
   sortBy: z.string().default("createdAt"),
   order: z.enum(["asc", "desc"]).default("desc"),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 });
 
 export type getTicketInput = z.infer<typeof getTicketSchema>;

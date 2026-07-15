@@ -16,6 +16,8 @@ export interface TicketFiltersState {
    * current session) before being sent to the backend - see TicketsDashboard.
    */
   mine?: boolean;
+  startDate?: string;
+  endDate?: string;
 }
 
 const VALID_STATUS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -47,6 +49,8 @@ export function useTicketFilters() {
     const order = searchParams.get("order");
     const mine = searchParams.get("mine");
     const projectId = searchParams.get("projectId");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     return {
       status: VALID_STATUS.includes(status as Status)
@@ -61,6 +65,8 @@ export function useTicketFilters() {
       order: order === "asc" ? "asc" : "desc",
       projectId: projectId || undefined,
       mine: mine === "true",
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
     };
   }, [searchParams]);
 
@@ -78,6 +84,8 @@ export function useTicketFilters() {
       }
       if (next.projectId) params.set("projectId", next.projectId);
       if (next.mine) params.set("mine", "true");
+      if (next.startDate) params.set("startDate", next.startDate);
+      if (next.endDate) params.set("endDate", next.endDate);
 
       const queryString = params.toString();
       router.replace(queryString ? `${pathname}?${queryString}` : pathname, {

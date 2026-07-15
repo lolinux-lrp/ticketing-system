@@ -20,18 +20,7 @@ function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 2) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
-}
+
 
 function shortId(id: string) {
   return id.slice(-6).toUpperCase();
@@ -180,9 +169,11 @@ export function TicketRow({ ticket }: TicketRowProps) {
         <td
           className="px-3 py-3 whitespace-nowrap text-xs"
           style={{ color: "var(--text-muted)" }}
-          title={new Date(ticket.createdAt).toLocaleString()}
         >
-          {relativeTime(ticket.createdAt)}
+          {new Date(ticket.createdAt).toLocaleDateString("en-US", {
+            year: "numeric", month: "short", day: "numeric",
+            hour: "2-digit", minute: "2-digit",
+          })}
         </td>
 
         {/* Actions */}

@@ -30,6 +30,8 @@ export interface GetTicketsParams {
   projectId?: string;
   sortBy?: string;
   order?: "asc" | "desc";
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface CreateTicketPayload {

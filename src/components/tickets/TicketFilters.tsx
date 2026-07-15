@@ -75,7 +75,7 @@ export function TicketFilters({
   }, [searchInput, filters, onChange]);
 
   const hasActive = Boolean(
-    filters.status || filters.priority || filters.search || filters.mine
+    filters.status || filters.priority || filters.search || filters.mine || filters.startDate || filters.endDate
   );
 
   return (
@@ -177,6 +177,25 @@ export function TicketFilters({
       )}
 
       <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-1 bg-[var(--surface-0)] border border-[var(--border)] rounded-md px-2 overflow-hidden">
+          <input
+            type="date"
+            value={filters.startDate ?? ""}
+            onChange={(e) => onChange({ ...filters, startDate: e.target.value || undefined })}
+            className="bg-transparent text-[11px] outline-none"
+            style={{ color: "var(--text-secondary)", padding: "4px 0" }}
+            title="Start Date"
+          />
+          <span className="text-[10px] text-[var(--text-muted)]">-</span>
+          <input
+            type="date"
+            value={filters.endDate ?? ""}
+            onChange={(e) => onChange({ ...filters, endDate: e.target.value || undefined })}
+            className="bg-transparent text-[11px] outline-none"
+            style={{ color: "var(--text-secondary)", padding: "4px 0" }}
+            title="End Date"
+          />
+        </div>
         <select
           value={filters.projectId ?? ""}
           onChange={(e) => onChange({ ...filters, projectId: e.target.value || undefined })}

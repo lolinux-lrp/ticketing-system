@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { search, status, priority, createdById, projectId, sortBy, order } =
+    const { search, status, priority, createdById, projectId, sortBy, order, startDate, endDate } =
       validation.data;
 
     if (search) {
@@ -97,6 +97,12 @@ export async function GET(req: NextRequest) {
           ...(priority ? { priority } : {}),
           ...(projectId ? { projectId } : {}),
           ...(isCustomer ? { createdById: session.user.id } : {}),
+          ...((startDate || endDate) ? {
+            createdAt: {
+              ...(startDate ? { gte: new Date(startDate) } : {}),
+              ...(endDate ? { lte: new Date(endDate) } : {}),
+            }
+          } : {})
         },
         orderBy: { createdAt: "desc" },
         take: 50,
@@ -125,6 +131,13 @@ export async function GET(req: NextRequest) {
       createdById,
       projectId,
     };
+
+    if (startDate || endDate) {
+      where.createdAt = {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lte: new Date(endDate) } : {}),
+      };
+    }
 
     if (!can(session.user, "ticket:view")) {
       where.createdById = session.user.id;
