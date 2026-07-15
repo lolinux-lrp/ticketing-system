@@ -124,9 +124,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const resolvedAt: Date | null | undefined =
+      data.status === "RESOLVED"
+        ? new Date()
+        : data.status === "OPEN" || data.status === "IN_PROGRESS"
+          ? null
+          : undefined; // CLOSED or no status change — leave resolvedAt intact
+
     const updateTicket = await prisma.ticket.update({
       where: { id },
-      data: validation.data,
+      data: {
+        ...data,
+        ...(resolvedAt !== undefined ? { resolvedAt } : {}),
+      },
       include: {
         assignedTo: { select: { id: true, name: true, email: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },

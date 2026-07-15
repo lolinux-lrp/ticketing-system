@@ -60,8 +60,31 @@ export const ticketsApi = createApi({
         method: "PATCH",
         body,
       }),
+      async onQueryStarted({ id, body }, { dispatch, queryFulfilled }) {
+        try {
+          const { data: updatedTicket } = await queryFulfilled;
+          dispatch(
+            ticketsApi.util.updateQueryData("getTicket", id, (draft) => {
+              Object.assign(draft.ticket, updatedTicket);
+              // Explicitly sync resolvedAt based on the status transition so the
+              // cache is always correct regardless of what the server response contains.
+              if (body.status === "OPEN" || body.status === "IN_PROGRESS") {
+                draft.ticket.resolvedAt = null;
+              } else if (body.status === "RESOLVED") {
+                // Always stamp the current time — this ensures re-resolving a ticket
+                // always shows the latest resolution timestamp, not a cached old one.
+                // The invalidatesTags refetch will overwrite with the server's exact value.
+                draft.ticket.resolvedAt = new Date().toISOString();
+              }
+            }),
+          );
+        } catch {
+          // mutation failed — invalidation will trigger a fresh refetch
+        }
+      },
       invalidatesTags: (result, error, { id }) => [
         { type: "Ticket", id },
+        { type: "Ticket", id: "LIST" },
       ],
     }),
     deleteTicket: builder.mutation<DeleteTicketResponse, string>({

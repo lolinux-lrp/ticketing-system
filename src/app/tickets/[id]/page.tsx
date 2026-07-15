@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/tickets/StatusBadge";
 import { PriorityBadge } from "@/components/tickets/PriorityBadge";
 import { TicketMeetingsCard } from "@/components/tickets/TicketMeetingsCard";
 import type { Status, Priority, Ticket } from "@/types";
+import { formatResolutionTime } from "@/lib/utils/resolutionTime";
 
 const statusOptions: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const priorityOptions: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -318,13 +319,35 @@ export default function TicketDetailPage() {
               label="Created"
               value={new Date(ticket.createdAt).toLocaleDateString("en-US", {
                 year: "numeric", month: "short", day: "numeric",
+                hour: "2-digit", minute: "2-digit",
               })}
             />
             <MetaRow
               label="Last updated"
               value={new Date(ticket.updatedAt).toLocaleDateString("en-US", {
                 year: "numeric", month: "short", day: "numeric",
+                hour: "2-digit", minute: "2-digit",
               })}
+            />
+            <div className="h-px" style={{ background: "var(--border)" }} />
+            <MetaRow
+              label="Resolved at"
+              value={
+                ticket.status === "OPEN" || ticket.status === "IN_PROGRESS"
+                  ? <span style={{ color: "var(--text-muted)" }}>Pending</span>
+                  : new Date(ticket.resolvedAt ?? ticket.updatedAt).toLocaleDateString("en-US", {
+                      year: "numeric", month: "short", day: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })
+              }
+            />
+            <MetaRow
+              label="Resolution time"
+              value={
+                ticket.status === "OPEN" || ticket.status === "IN_PROGRESS"
+                  ? <span style={{ color: "var(--text-muted)" }}>Pending</span>
+                  : formatResolutionTime(ticket.createdAt, ticket.resolvedAt ?? ticket.updatedAt)
+              }
             />
           </div>
 

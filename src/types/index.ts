@@ -9,12 +9,13 @@ export interface TicketUser {
   email?: string;
 }
 
-export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "resolution" | "contactEmail" | "searchVector"> {
+export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "resolution" | "contactEmail" | "searchVector" | "resolvedAt"> {
   description?: string;
   resolution: string | null;
   searchVector?: unknown;
   createdAt: string;
   updatedAt: string;
+  resolvedAt: string | null;
   createdBy: TicketUser;
   assignedTo: TicketUser | null;
   project?: { id: string; name: string } | null;
