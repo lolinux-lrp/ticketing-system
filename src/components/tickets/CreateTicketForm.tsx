@@ -41,7 +41,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
     setWasOpen(isOpen);
     if (isOpen) {
       setTitle(""); setDescription(""); setPriority("MEDIUM");
-      setProjectId(""); setContactEmail("");
+      setProjectId(""); setContactEmail(session?.user?.email || "");
       setFormError(null); setSuccess(false);
     }
   }
@@ -62,8 +62,8 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
         description,
         priority,
         createdById: session.user.id,
-        projectId: projectId || undefined,
-        contactEmail: contactEmail || undefined,
+        projectId,
+        contactEmail,
       }).unwrap();
       setTitle(""); setDescription(""); setPriority("MEDIUM");
       setProjectId(""); setContactEmail("");
@@ -193,7 +193,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: "var(--text-muted)" }}
             >
-              Project
+              Project *
             </label>
             <ProjectSelect projectId={projectId} setProjectId={setProjectId} />
           </div>
@@ -204,7 +204,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: "var(--text-muted)" }}
             >
-              Contact Email
+              Contact Email *
             </label>
             <input
               id="ct-contact-email"
@@ -212,7 +212,8 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
               className="input-base"
-              placeholder="example@example.com (optional)"
+              placeholder="example@example.com"
+              required
             />
           </div>
 
@@ -272,6 +273,15 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
 function ProjectSelect({ projectId, setProjectId }: { projectId: string; setProjectId: (id: string) => void }) {
   const { data: projects, isLoading } = useGetProjectsQuery();
 
+  useEffect(() => {
+    if (projects && !projectId) {
+      const otherProject = projects.find(p => p.name === "Other");
+      if (otherProject) {
+        setProjectId(otherProject.id);
+      }
+    }
+  }, [projects, projectId, setProjectId]);
+
   return (
     <select
       id="ct-project"
@@ -279,8 +289,9 @@ function ProjectSelect({ projectId, setProjectId }: { projectId: string; setProj
       onChange={(e) => setProjectId(e.target.value)}
       className="input-base cursor-pointer"
       disabled={isLoading}
+      required
     >
-      <option value="">Select a project (optional)</option>
+      <option value="" disabled>Select a project *</option>
       {projects?.map((project) => (
         <option key={project.id} value={project.id}>
           {project.name}

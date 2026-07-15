@@ -13,8 +13,8 @@ export const createTicketSchema = z.object({
     .min(10, "Description should be atleat 10 characters"),
   priority: z.enum(Priority).optional(),
   createdById: z.string().uuid("Invalid User ID"),
-  projectId: z.string().uuid("Invalid Project ID").optional(),
-  contactEmail: z.string().email("Invalid email address").optional().nullable(),
+  projectId: z.string().uuid("Please select a valid project"),
+  contactEmail: z.string().email("A valid contact email is required"),
 });
 
 export type createTicketInput = z.infer<typeof createTicketSchema>;

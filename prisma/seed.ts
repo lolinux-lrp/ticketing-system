@@ -19,6 +19,7 @@ async function main() {
     'BOBCARD',
     'IndusInd',
     'BOM',
+    'Other',
   ];
 
   console.log("Upserting Projects...");
