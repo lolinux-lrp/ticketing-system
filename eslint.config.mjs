@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Utility scripts are plain Node.js and not part of the app source
+    "scripts/**",
   ]),
 ]);
 

@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import type { Adapter } from "next-auth/adapters";
 
-
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma) as Adapter,
     session: {
@@ -17,7 +16,6 @@ export const authOptions: NextAuthOptions = {
         ((GoogleProvider as unknown as { default?: typeof GoogleProvider }).default || GoogleProvider)({
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-            allowDangerousEmailAccountLinking: true,
             authorization: { params: { prompt: "select_account" } },
         }),
         ((CredentialsProvider as unknown as { default?: typeof CredentialsProvider }).default || CredentialsProvider)({
@@ -31,6 +29,11 @@ export const authOptions: NextAuthOptions = {
                 if (!result.success) return null;
 
                 const { email, password } = result.data;
+
+                if (!email) {
+                    throw new Error("Email is required for authentication");
+                }
+
                 const user = await prisma.user.findUnique({ where: { email } });
 
                 if (!user || !user.password) return null;
@@ -43,33 +46,44 @@ export const authOptions: NextAuthOptions = {
         }),
     ],
     callbacks: {
-        async jwt({ token, user }) {
-            if (user) {
-                // Fresh login — look up from DB to get authoritative id + role
-                const dbUser = await prisma.user.findUnique({
-                    where: { email: user.email! },
-                    select: { id: true, role: true },
-                });
-                if (dbUser) {
-                    token.id = dbUser.id;
-                    token.role = dbUser.role;
-                } else {
-                    // Fallback for brand-new OAuth users not yet in DB
-                    token.id = user.id;
-                    token.role = user.role ?? "CUSTOMER";
+        async jwt({ token, user, account }) {
+            if (user && account) {
+                if (!user.email) {
+                    throw new Error("Authentication failed: Provider did not return an email address.");
                 }
-                // Tag the token with the email so we can detect mismatches on refresh
-                token.email = user.email;
-            } else if (token.id) {
+
+                // Fresh login — look up the user strictly by email to get their DB id + role.
+                // This is the single source of truth and prevents any token cross-contamination.
+                const dbUser = await prisma.user.findUnique({
+                    where: { email: user.email },
+                    select: { id: true, role: true, email: true },
+                });
+
+                if (!dbUser) {
+                    // Brand-new OAuth user: the adapter may not have committed them yet.
+                    // Throw to abort the session rather than risk falling back to a stale id.
+                    throw new Error("Authentication failed: User record not found after sign-in.");
+                }
+
+                token.id = dbUser.id;
+                token.role = dbUser.role;
+                token.email = dbUser.email;
+            } else if (!user && token.id) {
+                if (typeof token.id !== "string") {
+                    throw new Error("Authentication failed: Invalid session token ID.");
+                }
+
                 // Token refresh — re-validate against DB to prevent stale sessions
                 const dbUser = await prisma.user.findUnique({
                     where: { id: token.id },
                     select: { id: true, role: true, email: true },
                 });
+
                 if (!dbUser) {
                     // User was deleted — invalidate the token
                     return {} as typeof token;
                 }
+
                 token.role = dbUser.role;
                 token.email = dbUser.email;
             }
@@ -80,7 +94,6 @@ export const authOptions: NextAuthOptions = {
             if (session.user && token.id) {
                 session.user.id = token.id;
                 session.user.role = token.role;
-                // Ensure the session email always matches the DB user
                 session.user.email = token.email as string;
             }
             return session;
