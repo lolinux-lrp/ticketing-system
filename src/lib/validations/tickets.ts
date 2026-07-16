@@ -29,6 +29,7 @@ export const getTicketSchema = z.object({
   order: z.enum(["asc", "desc"]).default("desc"),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  assignedToId: z.string().optional(),
 });
 
 export type getTicketInput = z.infer<typeof getTicketSchema>;

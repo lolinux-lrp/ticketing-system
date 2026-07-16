@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { search, status, priority, createdById, projectId, sortBy, order, startDate, endDate } =
+    const { search, status, priority, createdById, projectId, sortBy, order, startDate, endDate, assignedToId } =
       validation.data;
 
     if (search) {
@@ -97,6 +97,7 @@ export async function GET(req: NextRequest) {
           ...(priority ? { priority } : {}),
           ...(projectId ? { projectId } : {}),
           ...(isCustomer ? { createdById: session.user.id } : {}),
+          ...(assignedToId && assignedToId !== "ALL" ? { assignedToId } : {}),
           ...((startDate || endDate) ? {
             createdAt: {
               ...(startDate ? { gte: new Date(startDate) } : {}),
@@ -131,6 +132,10 @@ export async function GET(req: NextRequest) {
       createdById,
       projectId,
     };
+
+    if (assignedToId && assignedToId !== "ALL") {
+      where.assignedToId = assignedToId;
+    }
 
     if (startDate || endDate) {
       where.createdAt = {

@@ -18,6 +18,7 @@ export interface TicketFiltersState {
   mine?: boolean;
   startDate?: string;
   endDate?: string;
+  assignedToId?: string;
 }
 
 const VALID_STATUS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -51,6 +52,7 @@ export function useTicketFilters() {
     const projectId = searchParams.get("projectId");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
+    const assignedToId = searchParams.get("assignedToId");
 
     return {
       status: VALID_STATUS.includes(status as Status)
@@ -67,6 +69,7 @@ export function useTicketFilters() {
       mine: mine === "true",
       startDate: startDate || undefined,
       endDate: endDate || undefined,
+      assignedToId: assignedToId || undefined,
     };
   }, [searchParams]);
 
@@ -86,6 +89,7 @@ export function useTicketFilters() {
       if (next.mine) params.set("mine", "true");
       if (next.startDate) params.set("startDate", next.startDate);
       if (next.endDate) params.set("endDate", next.endDate);
+      if (next.assignedToId) params.set("assignedToId", next.assignedToId);
 
       const queryString = params.toString();
       router.replace(queryString ? `${pathname}?${queryString}` : pathname, {

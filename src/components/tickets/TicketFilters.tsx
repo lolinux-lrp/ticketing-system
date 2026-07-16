@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import type { Priority, Status } from "@/types";
 import type { TicketFiltersState } from "./useTicketFilters";
 import { useGetProjectsQuery } from "@/store/ticketsApi";
+import { useSession } from "next-auth/react";
+import { useGetAgentsQuery } from "@/store/usersApi";
+import { AssignedToFilter } from "./AssignedToFilter";
 
 const STATUS_OPTIONS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const PRIORITY_OPTIONS: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -56,6 +59,10 @@ export function TicketFilters({
   onChange,
   showMineToggle,
 }: TicketFiltersProps) {
+  const { data: session } = useSession();
+  const { data: agents } = useGetAgentsQuery(undefined, { 
+    skip: !session || session.user.role !== "ADMIN" 
+  });
   const { data: projects } = useGetProjectsQuery();
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
 
@@ -155,24 +162,16 @@ export function TicketFilters({
         ))}
       </div>
 
-      {showMineToggle && (
+      {showMineToggle && session?.user && (
         <>
           <div className="w-px h-4 mx-0.5" style={{ background: "var(--border)" }} />
-          <button
-            type="button"
-            onClick={() => onChange({ ...filters, mine: !filters.mine })}
-          >
-            <FilterChip
-              label="My Tickets"
-              active={filters.mine}
-            >
-              {filters.mine && (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-              )}
-            </FilterChip>
-          </button>
+          <AssignedToFilter
+            users={agents || []}
+            currentUserId={session.user.id}
+            role={session.user.role as "ADMIN" | "AGENT" | "CUSTOMER"}
+            value={filters.assignedToId}
+            onChange={(userId) => onChange({ ...filters, assignedToId: userId })}
+          />
         </>
       )}
 
@@ -196,6 +195,29 @@ export function TicketFilters({
             title="End Date"
           />
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams();
+            if (filters.startDate) params.set("startDate", filters.startDate);
+            if (filters.endDate) params.set("endDate", filters.endDate);
+            window.location.href = `/api/tickets/export?${params.toString()}`;
+          }}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+          style={{
+            background: "var(--surface-2)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border)",
+          }}
+          title="Export to CSV"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" x2="12" y1="15" y2="3"/>
+          </svg>
+          Export CSV
+        </button>
         <select
           value={filters.projectId ?? ""}
           onChange={(e) => onChange({ ...filters, projectId: e.target.value || undefined })}
