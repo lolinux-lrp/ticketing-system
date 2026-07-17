@@ -18,7 +18,7 @@ import type { Status, Priority, Ticket } from "@/types";
 import { formatResolutionTime } from "@/lib/utils/resolutionTime";
 
 const statusOptions: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
-const priorityOptions: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const priorityOptions: Priority[] = ["P4", "P3", "P2", "P1"];
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (

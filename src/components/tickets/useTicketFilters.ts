@@ -22,7 +22,7 @@ export interface TicketFiltersState {
 }
 
 const VALID_STATUS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
-const VALID_PRIORITY: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const VALID_PRIORITY: Priority[] = ["P4", "P3", "P2", "P1"];
 const VALID_SORT_FIELDS = [
   "createdAt",
   "updatedAt",

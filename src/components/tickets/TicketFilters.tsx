@@ -9,7 +9,7 @@ import { useGetAgentsQuery } from "@/store/usersApi";
 import { AssignedToFilter } from "./AssignedToFilter";
 
 const STATUS_OPTIONS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
-const PRIORITY_OPTIONS: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const PRIORITY_OPTIONS: Priority[] = ["P4", "P3", "P2", "P1"];
 
 const STATUS_LABELS: Record<Status, string> = {
   OPEN: "Open",
@@ -18,10 +18,10 @@ const STATUS_LABELS: Record<Status, string> = {
   CLOSED: "Closed",
 };
 const PRIORITY_LABELS: Record<Priority, string> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  URGENT: "Urgent",
+  P4: "P4 (Low)",
+  P3: "P3 (Medium)",
+  P2: "P2 (High)",
+  P1: "P1 (Critical)",
 };
 
 interface TicketFiltersProps {

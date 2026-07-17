@@ -6,23 +6,49 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  ADMIN
+  AGENT
+  CUSTOMER
+}
+
+enum Status {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  P1 // Critical / Urgent
+  P2 // High / Significant
+  P3 // Medium / General
+  P4 // Low / Info
+}
+
+enum AttendeeStatus {
+  ACCEPTED
+  DECLINED
+  PENDING
+  CANCELLED
+}
+
 model User {
-  id                 String            @id @default(uuid())
+  id                 String             @id @default(uuid())
   name               String?
-  email              String?           @unique
-  password           String?
-  role               Role              @default(CUSTOMER)
-  createdAt          DateTime          @default(now())
+  email              String?            @unique
   emailVerified      DateTime?
   image              String?
-  deletedAt          DateTime?
-  accounts           Account[]
+  password           String?
+  role               Role               @default(CUSTOMER)
+  createdTickets     Ticket[]           @relation("CreatedTickets")
+  assignedTickets    Ticket[]           @relation("AssignedTickets")
   comments           Comment[]
-  meetingsCreated    Meeting[]         @relation("MeetingHost")
+  meetingsCreated    Meeting[]          @relation("MeetingHost")
   meetingAttendances MeetingAttendee[]
+  createdAt          DateTime           @default(now())
+  accounts           Account[]
   sessions           Session[]
-  assignedTickets    Ticket[]          @relation("AssignedTickets")
-  createdTickets     Ticket[]          @relation("CreatedTickets")
 }
 
 model Account {
@@ -31,14 +57,15 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String? @db.Text
   session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -68,25 +95,25 @@ model Project {
 }
 
 model Ticket {
-  id           String                   @id @default(uuid())
+  id           String                     @id @default(uuid())
   title        String
   description  String
-  status       Status                   @default(OPEN)
-  priority     Priority                 @default(P3)
+  status       Status                     @default(OPEN)
+  priority     Priority                   @default(P3)
+  createdBy    User                       @relation("CreatedTickets", fields: [createdById], references: [id])
   createdById  String
+  assignedTo   User?                      @relation("AssignedTickets", fields: [assignedToId], references: [id])
   assignedToId String?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  searchVector Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(description, ''::text)))"))
-  contactEmail String?
+  project      Project?                   @relation(fields: [projectId], references: [id])
   projectId    String?
-  resolution   String?
-  resolvedAt   DateTime?
+  contactEmail String?
   comments     Comment[]
   meetings     Meeting[]
-  assignedTo   User?                    @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: Restrict)
-  createdBy    User                     @relation("CreatedTickets", fields: [createdById], references: [id])
-  project      Project?                 @relation(fields: [projectId], references: [id])
+  resolution   String?
+  resolvedAt   DateTime?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  searchVector Unsupported("tsvector")?
 
   @@index([createdById])
   @@index([assignedToId])
@@ -100,11 +127,11 @@ model Ticket {
 model Comment {
   id        String   @id @default(uuid())
   content   String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
   ticketId  String
+  author    User     @relation(fields: [authorId], references: [id])
   authorId  String
   createdAt DateTime @default(now())
-  author    User     @relation(fields: [authorId], references: [id])
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
 
   @@index([ticketId])
   @@index([authorId])
@@ -119,13 +146,13 @@ model Meeting {
   meetingUrl            String
   externalGoogleEventId String?
   ticketId              String?
+  ticket                Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   createdById           String
+  createdBy             User              @relation("MeetingHost", fields: [createdById], references: [id])
+  attendees             MeetingAttendee[]
+  reminderSentAt        DateTime?
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
-  reminderSentAt        DateTime?
-  createdBy             User              @relation("MeetingHost", fields: [createdById], references: [id])
-  ticket                Ticket?           @relation(fields: [ticketId], references: [id])
-  attendees             MeetingAttendee[]
 
   @@index([ticketId])
   @@index([createdById])
@@ -134,39 +161,12 @@ model Meeting {
 model MeetingAttendee {
   id        String         @id @default(cuid())
   meetingId String
-  userId    String
-  status    AttendeeStatus @default(ACCEPTED)
   meeting   Meeting        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    AttendeeStatus @default(ACCEPTED)
 
   @@unique([meetingId, userId])
   @@index([meetingId])
   @@index([userId])
-}
-
-enum Role {
-  ADMIN
-  AGENT
-  CUSTOMER
-}
-
-enum Status {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-}
-
-enum Priority {
-  P1 // Critical / Urgent
-  P2 // High / Significant
-  P3 // Medium / General
-  P4 // Low / Info
-}
-
-enum AttendeeStatus {
-  ACCEPTED
-  DECLINED
-  PENDING
-  CANCELLED
 }

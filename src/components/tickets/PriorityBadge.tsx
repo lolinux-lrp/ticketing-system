@@ -30,14 +30,14 @@ function IconLow() {
 }
 
 const PRIORITY_MAP: Record<Priority, { label: string; cls: string; icon: React.ReactNode }> = {
-  URGENT: { label: "Urgent", cls: "priority-urgent", icon: <IconUrgent /> },
-  HIGH:   { label: "High",   cls: "priority-high",   icon: <IconHigh /> },
-  MEDIUM: { label: "Medium", cls: "priority-medium",  icon: <IconMedium /> },
-  LOW:    { label: "Low",    cls: "priority-low",    icon: <IconLow /> },
+  P1: { label: "P1 (Critical)", cls: "priority-urgent", icon: <IconUrgent /> },
+  P2:   { label: "P2 (High)",   cls: "priority-high",   icon: <IconHigh /> },
+  P3: { label: "P3 (Medium)", cls: "priority-medium",  icon: <IconMedium /> },
+  P4:    { label: "P4 (Low)",    cls: "priority-low",    icon: <IconLow /> },
 };
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
-  const { label, cls, icon } = PRIORITY_MAP[priority] ?? PRIORITY_MAP.MEDIUM;
+  const { label, cls, icon } = PRIORITY_MAP[priority] ?? PRIORITY_MAP.P3;
   return (
     <span className={`priority-chip ${cls}`}>
       {icon}

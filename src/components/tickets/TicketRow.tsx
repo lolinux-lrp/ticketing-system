@@ -137,7 +137,7 @@ export function TicketRow({ ticket }: TicketRowProps) {
               className="input-base cursor-pointer disabled:opacity-50"
               style={{ padding: "4px 8px", fontSize: "12px", width: "auto", minWidth: "90px" }}
             >
-              {(["LOW", "MEDIUM", "HIGH", "URGENT"] as Priority[]).map((p) => (
+              {(["P4", "P3", "P2", "P1"] as Priority[]).map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>

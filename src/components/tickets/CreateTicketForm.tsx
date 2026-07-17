@@ -7,9 +7,9 @@ import { useCreateTicketMutation, useGetProjectsQuery } from "@/store/ticketsApi
 import type { Priority } from "@/types";
 import { extractErrorMessage } from "./extractErrorMessage";
 
-const PRIORITY_OPTIONS: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const PRIORITY_OPTIONS: Priority[] = ["P4", "P3", "P2", "P1"];
 const PRIORITY_LABELS: Record<Priority, string> = {
-  LOW: "Low", MEDIUM: "Medium", HIGH: "High", URGENT: "Urgent",
+  P4: "P4 (Low)", P3: "P3 (Medium)", P2: "P2 (High)", P1: "P1 (Critical)",
 };
 
 interface CreateTicketSlideOverProps {
@@ -23,7 +23,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<Priority>("MEDIUM");
+  const [priority, setPriority] = useState<Priority>("P3");
   const [projectId, setProjectId] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     if (isOpen) {
-      setTitle(""); setDescription(""); setPriority("MEDIUM");
+      setTitle(""); setDescription(""); setPriority("P3");
       setProjectId(""); setContactEmail(session?.user?.email || "");
       setFormError(null); setSuccess(false);
     }
@@ -65,7 +65,7 @@ export function CreateTicketSlideOver({ isOpen, onClose }: CreateTicketSlideOver
         projectId,
         contactEmail,
       }).unwrap();
-      setTitle(""); setDescription(""); setPriority("MEDIUM");
+      setTitle(""); setDescription(""); setPriority("P3");
       setProjectId(""); setContactEmail("");
       setSuccess(true);
       setTimeout(() => { setSuccess(false); onClose(); }, 1200);
