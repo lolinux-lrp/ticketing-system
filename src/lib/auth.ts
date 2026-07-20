@@ -17,6 +17,8 @@ export const authOptions: NextAuthOptions = {
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
             authorization: { params: { prompt: "select_account" } },
+            // Required for Email-to-Ticket Ingestion: When clients from domains like tmbank.in or sib.bank.in submit support emails, our cron route creates a User record with their email and a CUSTOMER role. Because Google natively guarantees email verification, setting allowDangerousEmailAccountLinking to true safely allows NextAuth to automatically link their Google OAuth profile to that pre-existing database row on their first web login, preventing OAuthAccountNotLinked errors.
+            allowDangerousEmailAccountLinking: true,
         }),
         ((CredentialsProvider as unknown as { default?: typeof CredentialsProvider }).default || CredentialsProvider)({
             name: "Credentials",
