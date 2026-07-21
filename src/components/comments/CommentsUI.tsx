@@ -191,7 +191,7 @@ export const CommentsUI: React.FC<CommentsUIProps> = ({
                     </div>
 
                     {/* Content */}
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: "var(--text-secondary)" }}>
                       {comment.content}
                     </p>
                   </div>

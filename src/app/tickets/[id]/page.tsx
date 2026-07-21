@@ -22,11 +22,11 @@ const priorityOptions: Priority[] = ["P4", "P3", "P2", "P1"];
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+    <div className="flex flex-col gap-1 min-w-0">
+      <span className="text-[10px] font-semibold uppercase tracking-wider truncate" style={{ color: "var(--text-muted)" }} title={label}>
         {label}
       </span>
-      <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+      <span className="text-sm min-w-0 w-full" style={{ color: "var(--text-secondary)" }}>
         {value}
       </span>
     </div>
@@ -153,7 +153,7 @@ export default function TicketDetailPage() {
             <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
               Description
             </p>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: "var(--text-secondary)" }}>
               {ticket.description}
             </p>
           </div>
@@ -293,23 +293,25 @@ export default function TicketDetailPage() {
               Details
             </p>
 
-            <MetaRow label="Created by" value={ticket.createdBy?.name ?? "—"} />
+            <MetaRow label="Created by" value={<span className="block truncate w-full" title={ticket.createdBy?.name ?? "—"}>{ticket.createdBy?.name ?? "—"}</span>} />
             <MetaRow
               label="Assigned to"
-              value={ticket.assignedTo?.name ?? (
-                <span style={{ color: "var(--text-muted)" }}>Unassigned</span>
+              value={ticket.assignedTo?.name ? (
+                <span className="block truncate w-full" title={ticket.assignedTo.name}>{ticket.assignedTo.name}</span>
+              ) : (
+                <span className="block truncate w-full" style={{ color: "var(--text-muted)" }}>Unassigned</span>
               )}
             />
             {ticket.project && (
               <MetaRow label="Project" value={
-                <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
+                <span className="px-2 py-0.5 rounded text-xs font-semibold block truncate w-full" title={ticket.project.name} style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
                   {ticket.project.name}
                 </span>
               } />
             )}
             {ticket.contactEmail && (
               <MetaRow label="Contact Email" value={
-                <a href={`mailto:${ticket.contactEmail}`} className="text-blue-500 hover:underline">
+                <a href={`mailto:${ticket.contactEmail}`} className="text-blue-500 hover:underline block truncate w-full" title={ticket.contactEmail}>
                   {ticket.contactEmail}
                 </a>
               } />
@@ -383,7 +385,7 @@ function ResolutionSection({ ticket, updateTicket, canManage, ticketId }: { tick
     return (
       <div className="rounded-xl p-5 mb-4" style={{ background: "rgba(99,102,241,0.04)", border: "1px solid rgba(99,102,241,0.15)" }}>
         <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--brand)" }}>Resolution Notes</p>
-        <p className="text-sm leading-relaxed whitespace-pre-wrap italic opacity-50" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words italic opacity-50" style={{ color: "var(--text-secondary)" }}>
           No resolution recorded yet.
         </p>
       </div>
@@ -423,7 +425,7 @@ function ResolutionSection({ ticket, updateTicket, canManage, ticketId }: { tick
           </div>
         </div>
       ) : (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: "var(--text-secondary)" }}>
           {ticket.resolution || <span className="italic opacity-50">No resolution recorded yet.</span>}
         </p>
       )}

@@ -1,6 +1,11 @@
-import { Status, Priority, Role, Ticket as PrismaTicket, Comment as PrismaComment } from "@prisma/client";
+import { Status, Priority, Role, Ticket as PrismaTicket, Comment as PrismaComment, Project as PrismaProject, ProjectDomain } from "@prisma/client";
 
 export { Status, Priority, Role };
+
+export interface Project extends PrismaProject {
+  domains: ProjectDomain[];
+}
+
 
 export interface TicketUser {
   id: string;

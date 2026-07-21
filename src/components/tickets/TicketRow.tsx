@@ -79,21 +79,22 @@ export function TicketRow({ ticket }: TicketRowProps) {
         </td>
 
         {/* Title + Project Badge */}
-        <td className="px-3 py-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+        <td className="px-3 py-3 truncate max-w-0">
+          <div className="flex items-center gap-2 mb-1 truncate">
             <Link
               href={`/tickets/${ticket.id}`}
-              className="font-medium text-sm leading-snug hover:underline line-clamp-1 block"
+              className="font-medium text-sm leading-snug hover:underline truncate block min-w-0 flex-1"
               style={{ color: "var(--text-primary)" }}
+              title={ticket.title}
             >
               {ticket.title}
             </Link>
             {ticket.project ? (
-              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:ring-indigo-800 whitespace-nowrap">
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:ring-indigo-800 shrink-0 max-w-[120px] truncate" title={ticket.project.name}>
                 {ticket.project.name}
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 whitespace-nowrap">
+              <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 shrink-0">
                 Other
               </span>
             )}

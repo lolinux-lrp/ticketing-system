@@ -60,11 +60,25 @@ model VerificationToken {
 }
 
 model Project {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tickets   Ticket[]
+  id                String          @id @default(uuid())
+  name              String          @unique
+  contractStart     DateTime?
+  contractEnd       DateTime?
+  expirationSubject String?
+  expirationBody    String?         @db.Text
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  tickets           Ticket[]
+  domains           ProjectDomain[]
+}
+
+model ProjectDomain {
+  id        String  @id @default(uuid())
+  domain    String  @unique
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 model Ticket {

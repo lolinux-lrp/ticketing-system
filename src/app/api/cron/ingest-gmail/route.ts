@@ -2,22 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google, gmail_v1 } from 'googleapis';
 import { prisma } from '@/lib/prisma';
 import { Priority, Role } from '@prisma/client';
-
-const DOMAIN_TO_PROJECT_MAP: Record<string, string> = {
-  "tmbank.in": "TMB",
-  "tfsin.co.in": "TFSIN",
-  "sib.bank.in": "SIB",
-  "iob.bank.in": "IOB",
-  "mahabank.co.in": "BOM",
-  "bankofmaharashtra.bank.in": "BOM",
-  "pronteff.com": "Pronteff",
-  "bajajautocredit.com": "Bajaj Auto Credit",
-  "bobcard.co.in": "BOBCARD",
-  "indusind.com": "IndusInd",
-  "odishabank.bank.in": "Odisha Bank",
-  "janabank.com": "Jana Bank",
-  "csb.bank.in": "CSB"
-};
+import { sendExpirationEmail } from '@/lib/email';
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,7 +35,9 @@ export async function GET(req: NextRequest) {
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     // Fetch projects
-    const allProjects = await prisma.project.findMany();
+    const allProjects = await prisma.project.findMany({
+      include: { domains: true }
+    });
     const otherProject = allProjects.find(p => p.name.toLowerCase() === 'other');
     if (!otherProject) {
       throw new Error("Fallback project 'Other' does not exist in the database. Please create it via Admin UI.");
@@ -174,33 +161,29 @@ export async function GET(req: NextRequest) {
         extractedDomain = senderEmail.split('@')[1].trim();
       }
 
-
-
-      let mappedProjectName = DOMAIN_TO_PROJECT_MAP[extractedDomain];
-      if (!mappedProjectName && extractedDomain) {
-        for (const [domainKey, projName] of Object.entries(DOMAIN_TO_PROJECT_MAP)) {
-          if (extractedDomain.endsWith(domainKey) || extractedDomain.includes(domainKey)) {
-            mappedProjectName = projName;
-            break;
-          }
-        }
-      }
-
       let matchedProject = otherProject;
 
-      if (mappedProjectName) {
-        const normalizedMapName = mappedProjectName.toLowerCase().replace(/\s/g, '');
-        const p = allProjects.find(pr => pr.name.toLowerCase().replace(/\s/g, '') === normalizedMapName);
-        if (p) {
-          matchedProject = p;
+      if (extractedDomain) {
+        const lowerExtractedDomain = extractedDomain.toLowerCase();
+        const projectWithDomain = allProjects.find(p => 
+          p.domains.some(d => {
+            const lowerDbDomain = d.domain.toLowerCase();
+            return lowerDbDomain === lowerExtractedDomain || lowerExtractedDomain.endsWith('.' + lowerDbDomain);
+          })
+        );
+
+        if (projectWithDomain) {
+          matchedProject = projectWithDomain;
         } else {
-          console.error(`[Routing Failure] Tried to match mapped project "${mappedProjectName}", but it does NOT exist in the database! Existing DB projects: ${allProjects.map(p => p.name).join(', ')}`);
-        }
-      } else if (extractedDomain) {
-        // Substring match
-        const found = allProjects.find(pr => extractedDomain.includes(pr.name.toLowerCase().replace(/\s/g, '')));
-        if (found) {
-          matchedProject = found;
+          // Substring match fallback against project name
+          const domainLabels = lowerExtractedDomain.split('.');
+          const found = allProjects.find(pr => {
+            const normalizedName = pr.name.toLowerCase().replace(/\s/g, '');
+            return normalizedName.length >= 4 && domainLabels.includes(normalizedName);
+          });
+          if (found) {
+            matchedProject = found;
+          }
         }
       }
 
@@ -209,6 +192,30 @@ export async function GET(req: NextRequest) {
         update: { name: senderName },
         create: { email: senderEmail, name: senderName, role: Role.CUSTOMER }
       });
+
+      if (matchedProject.contractEnd && new Date() > new Date(matchedProject.contractEnd)) {
+        console.log(`[Ingest] Rejected ticket from User ID: ${user.id} - Project contract expired on ${matchedProject.contractEnd.toISOString()}`);
+        
+        try {
+          await sendExpirationEmail({
+            to: senderEmail,
+            projectName: matchedProject.name,
+            originalSubject: subject,
+            customSubject: matchedProject.expirationSubject,
+            customBody: matchedProject.expirationBody,
+          });
+        } catch (emailErr) {
+          console.error(`[Ingest] Failed to send expiration email to User ID: ${user.id}:`, emailErr);
+        }
+
+        await gmail.users.messages.modify({
+          userId: 'me',
+          id: msg.id,
+          requestBody: { removeLabelIds: ['UNREAD'] }
+        });
+        
+        continue;
+      }
 
       const ticket = await prisma.ticket.create({
         data: {

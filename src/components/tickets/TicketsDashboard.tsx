@@ -138,7 +138,7 @@ export function TicketsDashboard() {
 
         {/* Table */}
         {!isLoading && !isError && tickets && tickets.length > 0 && (
-          <table className="data-grid">
+          <table className="data-grid w-full table-fixed min-w-[800px]">
             <thead>
               <tr>
                 <th style={{ width: "72px" }}>ID</th>

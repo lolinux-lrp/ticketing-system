@@ -15,21 +15,44 @@ The platform is constructed utilizing modern, high-performance web standards:
 
 ## Core Modules & Capabilities
 
-### Ticketing Engine
-The ticketing module operates as the central nervous system for customer support requests. It implements strict state-machine guards ensuring tickets cannot progress from the open state without prior assignment. Furthermore, stringent Role-Based Access Control (RBAC) rules govern reassignment, ensuring that only administrators possess the clearance to reassign active tickets from other agents, preventing task theft and unauthorized state modifications. Database indexes optimize high-volume queries by status, priority, and creation date.
+### Authentication, Authorization & User Management
+- **Session Management:** Secure session-based JWT authentication powered by NextAuth.js.
+- **Role-Based Access Control (RBAC):** Users are granted specific roles (`ADMIN`, `AGENT`, `CUSTOMER`) which govern their permissions across the platform, preventing unauthorized state transitions and ticket hijacking.
+- **Custom Auth Flows:** Comprehensive support for user signup, setting passwords, and password changes.
+- **User Invitations:** Administrative capability to securely invite new users to the platform.
+
+### Email-to-Ticket Gateway
+- **Automated Ingestion:** A background cron service connects directly to a support Gmail inbox via OAuth2 to convert incoming customer emails into tickets.
+- **Smart Filtering & Extraction:** Automatically filters out promotional emails, newsletters, and auto-replies (`no-reply`, `mailer-daemon`), stripping HTML and reply chains to extract the clean message body.
+- **Automated Priority Scoring:** Scans email subjects and bodies for critical keywords (e.g., "urgent", "broken", "issue") to automatically assign the correct priority (`P1` through `P4`).
+- **Domain-Based Project Routing:** Automatically maps the sender's email domain to route the ticket to the correct Project workspace, and creates customer accounts on-the-fly for new senders.
+
+### Ticketing & Project Management
+The ticketing module is the central nervous system for customer support requests.
+- **Project Organization:** Tickets can be logically grouped into Projects for streamlined management.
+- **State & Priority Tracking:** Tickets track precise statuses (`OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`) and priorities (`P1` to `P4`).
+- **Assignment & Workflows:** Strict state-machine guards ensure tickets are properly assigned to `AGENT`s or `ADMIN`s.
+- **Advanced Full-Text Search:** High-performance search capabilities utilizing PostgreSQL `tsvector` across ticket titles and descriptions.
+- **Data Export:** Secure endpoints allow authorized personnel to export ticket data into CSV format filtered by date ranges.
+
+### Collaboration System
+- **Threaded Comments:** Integrated commenting system on tickets allowing seamless asynchronous communication between customers and support agents.
 
 ### Scheduling & Video Infrastructure
-The integrated calendar subsystem enables localized, multi-timezone meeting scheduling directly attached to support tickets. Features include:
-- **Robust UI Validation:** The frontend implements a bespoke 3-box time input UI coupled with custom Regex validation to guarantee strict formatting compliance and boundary safety during meeting creation.
-- **Silent Room Provisioning:** Automated Google Meet room generation through a secure, service-level OAuth2 architecture.
-- **RFC-Compliant Dispatching:** Dynamic `.ics` file generation triggering native calendar invites (`REQUEST`) and cancellations (`CANCEL`) via the email subsystem.
-- **Smart RSVP Management:** End-to-end synchronization tracking attendee acceptance or decline statuses securely.
+The calendar subsystem enables localized, multi-timezone meeting scheduling attached directly to support tickets.
+- **Automated Video Rooms:** Silent Google Meet room generation via a secure, service-level OAuth2 architecture.
+- **RFC-Compliant Dispatching:** Dynamic `.ics` file generation for native calendar invites (`REQUEST`) and cancellations (`CANCEL`) via the email subsystem (Nodemailer).
+- **Attendee RSVP Management:** End-to-end synchronization tracking attendee statuses (`ACCEPTED`, `DECLINED`, `PENDING`, `CANCELLED`).
+- **Robust UI Validation:** Bespoke time input UI with strict formatting compliance guarantees for meeting creation.
 
 ### Background Automation
-To ensure meeting attendance and platform responsiveness, a secured background cron pipeline executes at 15-minute intervals. Protected by a stringent `CRON_SECRET` Bearer token mechanism, the service computes a forward-looking date boundary to query upcoming appointments and dispatches preemptive reminder notifications across the required network queues.
+- **Cron Pipeline:** A secured background service executing at 15-minute intervals, protected by a `CRON_SECRET` bearer token.
+- **Preemptive Reminders:** Computes upcoming appointment boundaries and automatically dispatches reminder notifications to attendees to ensure meeting attendance.
 
 ### Localized UX & Real-Time Caching
-The user interface leverages RTK Query to maintain a robust, race-condition-free data layer. Granular cache invalidation (`invalidatesTags`) implementations guarantee that API mutations immediately refresh targeted dashboard panels in real-time without triggering redundant DOM reflows or full page reloads. Additionally, the application guarantees hydration-safe client rendering by utilizing `Intl.DateTimeFormat` for processing localized timezones, entirely eliminating server-to-client mismatch errors in Next.js 16 environments.
+- **RTK Query Caching:** The frontend leverages Redux Toolkit (RTK Query) for robust data fetching and request deduplication.
+- **Targeted Cache Invalidation:** API mutations automatically trigger refetches of targeted dashboard panels without full page reloads.
+- **Localized Timezone Rendering:** Client rendering uses `Intl.DateTimeFormat` for localized timezones. Hydration safety is managed by stable locale inputs or client-only rendering to prevent Next.js mismatch errors.
 
 ## Local Development Setup
 
