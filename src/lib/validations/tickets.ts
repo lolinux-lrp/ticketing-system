@@ -11,7 +11,7 @@ export const createTicketSchema = z.object({
     .string()
     .trim()
     .min(10, "Description should be atleat 10 characters"),
-  priority: z.enum(Priority).optional(),
+  priority: z.preprocess((val) => typeof val === 'string' ? val.toUpperCase() : val, z.nativeEnum(Priority)).optional(),
   createdById: z.string().uuid("Invalid User ID"),
   projectId: z.string().uuid("Please select a valid project"),
   contactEmail: z.string().email("A valid contact email is required"),
@@ -22,7 +22,7 @@ export type createTicketInput = z.infer<typeof createTicketSchema>;
 export const getTicketSchema = z.object({
   search: z.string().optional(),
   status: z.enum(Status).optional(),
-  priority: z.enum(Priority).optional(),
+  priority: z.preprocess((val) => typeof val === 'string' ? val.toUpperCase() : val, z.nativeEnum(Priority)).optional(),
   createdById: z.string().uuid("Invalid User ID").optional(),
   projectId: z.string().uuid("Invalid Project ID").optional(),
   sortBy: z.string().default("createdAt"),
@@ -38,7 +38,7 @@ export const updateTicketSchema = z.object({
   title: z.string().trim().min(2).max(200).optional(),
   description: z.string().trim().min(10).optional(),
   status: z.enum(Status).optional(),
-  priority: z.enum(Priority).optional(),
+  priority: z.preprocess((val) => typeof val === 'string' ? val.toUpperCase() : val, z.nativeEnum(Priority)).optional(),
   assignedToId: z.string().uuid("Invalid Agent ID").optional().nullable(),
   resolution: z.string().optional(),
 });

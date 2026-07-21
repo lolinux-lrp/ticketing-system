@@ -168,7 +168,7 @@ export function TicketRow({ ticket }: TicketRowProps) {
 
         {/* Created */}
         <td
-          className="px-3 py-3 whitespace-nowrap text-xs"
+          className="px-3 py-3 text-xs"
           style={{ color: "var(--text-muted)" }}
         >
           {new Date(ticket.createdAt).toLocaleDateString("en-US", {

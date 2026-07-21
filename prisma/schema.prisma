@@ -93,10 +93,12 @@ model Ticket {
   updatedAt    DateTime                 @updatedAt
   searchVector Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(description, ''::text)))"))
   contactEmail String?
-  projectId    String?
-  resolution   String?
-  resolvedAt   DateTime?
-  comments     Comment[]
+  projectId        String?
+  resolution       String?
+  resolvedAt       DateTime?
+  adminEscalatedAt DateTime?
+  execEscalatedAt  DateTime?
+  comments         Comment[]
   meetings     Meeting[]
   assignedTo   User?                    @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: Restrict)
   createdBy    User                     @relation("CreatedTickets", fields: [createdById], references: [id])
@@ -183,4 +185,11 @@ enum AttendeeStatus {
   DECLINED
   PENDING
   CANCELLED
+}
+
+model ProcessedMessage {
+  id        String   @id
+  status    String   @default("PROCESSING")
+  lockedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 }

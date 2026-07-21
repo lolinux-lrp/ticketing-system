@@ -9,11 +9,19 @@ export const dynamic = "force-dynamic";
 
 const createProjectSchema = z.object({
   name: z.string().min(1, "Project name is required"),
-  domains: z.array(z.string()).default([]),
-  contractStart: z.string().nullable().optional(),
-  contractEnd: z.string().nullable().optional(),
+  domains: z.array(z.string().trim().toLowerCase().regex(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i, "Invalid domain format")).default([]),
+  contractStart: z.string().date("Invalid start date").nullable().optional(),
+  contractEnd: z.string().date("Invalid end date").nullable().optional(),
   expirationSubject: z.string().nullable().optional(),
   expirationBody: z.string().nullable().optional(),
+}).refine((data) => {
+  if (data.contractStart && data.contractEnd) {
+    return new Date(data.contractEnd) > new Date(data.contractStart);
+  }
+  return true;
+}, {
+  message: "Contract end date must be after start date",
+  path: ["contractEnd"],
 });
 
 export async function GET() {

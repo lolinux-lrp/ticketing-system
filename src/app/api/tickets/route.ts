@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const { description, title, projectId, contactEmail } = validation.data;
+    const { description, title, projectId, contactEmail, priority } = validation.data;
 
     // Always use the logged-in user's ID — never trust a createdById from the client
     const newTicket = await prisma.ticket.create({
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         title,
         projectId,
         contactEmail,
+        priority,
       },
       include: {
         project: true,

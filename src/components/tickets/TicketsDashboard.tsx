@@ -146,7 +146,7 @@ export function TicketsDashboard() {
                 <th style={{ width: "130px" }}>Status</th>
                 <th style={{ width: "110px" }}>Priority</th>
                 <th style={{ width: "140px" }}>Assignee</th>
-                <th style={{ width: "90px" }}>Created</th>
+                <th style={{ width: "140px" }}>Created</th>
                 <th style={{ width: "110px" }} />
               </tr>
             </thead>
