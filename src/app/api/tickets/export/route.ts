@@ -1,9 +1,11 @@
 import { NextResponse, NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/auth/policy";
+import { getTicketSchema } from "@/lib/validations/tickets";
+import { buildTicketFilters } from "@/lib/filters";
 
 export const dynamic = "force-dynamic";
 
@@ -29,29 +31,17 @@ export async function GET(req: NextRequest) {
       // If needed in the future, we can add a specific `ticket:export` permission.
     }
 
-    const { searchParams } = new URL(req.url);
-    const startDateParam = searchParams.get("startDate");
-    const endDateParam = searchParams.get("endDate");
+    const urlParams = Object.fromEntries(req.nextUrl.searchParams);
+    const validation = getTicketSchema.safeParse(urlParams);
 
-    const where: Prisma.TicketWhereInput = {};
-
-    // Customer can only export their own tickets
-    if (!can(session.user, "ticket:view")) {
-      where.createdById = session.user.id;
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Invalid query parameters" },
+        { status: 400 },
+      );
     }
 
-    if (startDateParam || endDateParam) {
-      where.createdAt = {};
-      if (startDateParam) {
-        where.createdAt.gte = new Date(startDateParam);
-      }
-      if (endDateParam) {
-        const endDate = new Date(endDateParam);
-        // Ensure endDate includes the full day until 23:59:59.999Z
-        endDate.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = endDate;
-      }
-    }
+    const where = buildTicketFilters(validation.data, session.user);
 
     const tickets = await prisma.ticket.findMany({
       where,
@@ -92,13 +82,13 @@ export async function GET(req: NextRequest) {
       csvContent += row.map(escapeCSV).join(",") + "\n";
     }
 
-    const fileNameDateStr = `${startDateParam || "all"}_to_${endDateParam || "all"}`;
+    const fileNameDateStr = new Date().toISOString().slice(0, 10);
 
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="tickets_export_${fileNameDateStr}.csv"`,
+        "Content-Disposition": `attachment; filename="tickets-export-${fileNameDateStr}.csv"`,
       },
     });
   } catch (error) {

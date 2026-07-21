@@ -65,6 +65,7 @@ export function TicketFilters({
   });
   const { data: projects } = useGetProjectsQuery();
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
+  const [isExporting, setIsExporting] = useState(false);
 
   const [syncedSearch, setSyncedSearch] = useState(filters.search);
   if (filters.search !== syncedSearch) {
@@ -197,17 +198,39 @@ export function TicketFilters({
         </div>
         <button
           type="button"
-          onClick={() => {
-            const params = new URLSearchParams();
-            if (filters.startDate) params.set("startDate", filters.startDate);
-            if (filters.endDate) params.set("endDate", filters.endDate);
-            window.location.href = `/api/tickets/export?${params.toString()}`;
+          disabled={isExporting}
+          onClick={async () => {
+            setIsExporting(true);
+            try {
+              const params = new URLSearchParams();
+              Object.entries(filters).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== "") {
+                  params.set(key, String(value));
+                }
+              });
+              const res = await fetch(`/api/tickets/export?${params.toString()}`);
+              if (!res.ok) throw new Error("Export failed");
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `tickets-export-${new Date().toISOString().slice(0, 10)}.csv`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+            } catch (err) {
+              console.error(err);
+            } finally {
+              setIsExporting(false);
+            }
           }}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
           style={{
-            background: "var(--surface-2)",
-            color: "var(--text-primary)",
+            background: isExporting ? "var(--surface-3)" : "var(--surface-2)",
+            color: isExporting ? "var(--text-muted)" : "var(--text-primary)",
             border: "1px solid var(--border)",
+            cursor: isExporting ? "wait" : "pointer"
           }}
           title="Export to CSV"
         >
@@ -216,7 +239,7 @@ export function TicketFilters({
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" x2="12" y1="15" y2="3"/>
           </svg>
-          Export CSV
+          {isExporting ? "Exporting..." : "Export CSV"}
         </button>
         <select
           value={filters.projectId ?? ""}

@@ -105,11 +105,11 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
           <div className="flex gap-8">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Host</p>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center text-[10px] font-bold">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center text-[10px] font-bold">
                   {(meeting.createdBy.name || meeting.createdBy.email || "H")[0].toUpperCase()}
                 </div>
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                <span className="text-sm font-medium truncate min-w-0" style={{ color: "var(--text-primary)" }} title={meeting.createdBy.name || meeting.createdBy.email || undefined}>
                   {meeting.createdBy.name || meeting.createdBy.email}
                   {amIHost && " (You)"}
                 </span>
@@ -120,11 +120,11 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
               <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Attendees</p>
               <div className="flex flex-col gap-2">
                 {meeting.attendees.map(a => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[10px] font-bold">
+                  <div key={a.id} className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 shrink-0 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[10px] font-bold">
                       {(a.user.name || a.user.email || "A")[0].toUpperCase()}
                     </div>
-                    <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                    <span className="text-sm truncate min-w-0" style={{ color: "var(--text-secondary)" }} title={a.user.name || a.user.email || undefined}>
                       {a.user.name || a.user.email}
                       {a.userId === session?.user?.id && " (You)"}
                     </span>

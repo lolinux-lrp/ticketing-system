@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createTicketSchema, getTicketSchema } from "@/lib/validations/tickets";
 import { sendNewTicketNotification } from "@/lib/email";
 import { can } from "@/lib/auth/policy";
+import { buildTicketFilters } from "@/lib/filters";
 
 export const dynamic = "force-dynamic";
 
@@ -82,72 +83,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { search, status, priority, createdById, projectId, sortBy, order, startDate, endDate, assignedToId } =
-      validation.data;
+    const { sortBy, order } = validation.data;
 
-    if (search) {
-      const isCustomer = !can(session.user, "ticket:view");
-
-      const tickets = await prisma.ticket.findMany({
-        where: {
-          OR: [
-            { title: { contains: search, mode: "insensitive" } },
-            { description: { contains: search, mode: "insensitive" } },
-          ],
-          ...(status ? { status } : {}),
-          ...(priority ? { priority } : {}),
-          ...(projectId ? { projectId } : {}),
-          ...(isCustomer ? { createdById: session.user.id } : {}),
-          ...(assignedToId && assignedToId !== "ALL" ? { assignedToId } : {}),
-          ...((startDate || endDate) ? {
-            createdAt: {
-              ...(startDate ? { gte: new Date(startDate) } : {}),
-              ...(endDate ? { lte: new Date(endDate) } : {}),
-            }
-          } : {})
-        },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          priority: true,
-          createdAt: true,
-          updatedAt: true,
-          assignedToId: true,
-          createdById: true,
-          assignedTo: { select: { id: true, name: true, role: true } },
-          createdBy: { select: { id: true, name: true, role: true } },
-          project: { select: { id: true, name: true } },
-        },
-      });
-
-      return NextResponse.json({ data: tickets });
-    }
-
-    // Normal filtered query (no search term)
-    const where: Prisma.TicketWhereInput = {
-      status,
-      priority,
-      createdById,
-      projectId,
-    };
-
-    if (assignedToId && assignedToId !== "ALL") {
-      where.assignedToId = assignedToId;
-    }
-
-    if (startDate || endDate) {
-      where.createdAt = {
-        ...(startDate ? { gte: new Date(startDate) } : {}),
-        ...(endDate ? { lte: new Date(endDate) } : {}),
-      };
-    }
-
-    if (!can(session.user, "ticket:view")) {
-      where.createdById = session.user.id;
-    }
+    const where = buildTicketFilters(validation.data, session.user);
 
     const tickets = await prisma.ticket.findMany({
       where,

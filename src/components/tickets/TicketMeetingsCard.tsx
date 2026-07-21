@@ -64,16 +64,16 @@ function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees
 
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Host</span>
-        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{meeting.createdBy.name || meeting.createdBy.email}</span>
+        <span className="text-xs truncate min-w-0 block" style={{ color: "var(--text-secondary)" }} title={meeting.createdBy.name || meeting.createdBy.email || undefined}>{meeting.createdBy.name || meeting.createdBy.email}</span>
       </div>
 
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Attendees ({meeting.attendees.length})</span>
         <div className="flex flex-wrap gap-1 mt-0.5">
           {meeting.attendees.map(a => (
-            <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-              {a.user.name || a.user.email}
-              <span className={`ml-1 ${a.status === 'ACCEPTED' ? 'text-emerald-500' : a.status === 'DECLINED' ? 'text-rose-500' : 'text-amber-500'}`}>
+            <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded flex items-center min-w-0" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+              <span className="truncate min-w-0" title={a.user.name || a.user.email || undefined}>{a.user.name || a.user.email}</span>
+              <span className={`ml-1 shrink-0 ${a.status === 'ACCEPTED' ? 'text-emerald-500' : a.status === 'DECLINED' ? 'text-rose-500' : 'text-amber-500'}`}>
                 •
               </span>
             </span>

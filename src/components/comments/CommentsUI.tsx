@@ -143,18 +143,18 @@ export const CommentsUI: React.FC<CommentsUIProps> = ({
                   >
                     {/* Meta row */}
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                      <div className="flex items-center gap-2 flex-nowrap min-w-0">
+                        <span className="text-xs font-semibold truncate min-w-0" style={{ color: "var(--text-primary)" }} title={comment.author.name}>
                           {comment.author.name}
                         </span>
                         <span
-                          className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider"
+                          className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider shrink-0"
                           style={{ background: avatarBg + "22", color: avatarBg }}
                         >
                           {comment.author.role}
                         </span>
                         <span
-                          className="text-[11px]"
+                          className="text-[11px] shrink-0"
                           style={{ color: "var(--text-muted)" }}
                           title={new Date(comment.createdAt).toLocaleString()}
                         >

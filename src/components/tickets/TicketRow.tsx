@@ -146,16 +146,16 @@ export function TicketRow({ ticket }: TicketRowProps) {
         </td>
 
         {/* Assignee */}
-        <td className="px-3 py-3 whitespace-nowrap">
+        <td className="px-3 py-3 whitespace-nowrap max-w-0">
           {ticket.assignedTo ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span
-                className="avatar w-5 h-5 text-white"
+                className="avatar w-5 h-5 shrink-0 text-white"
                 style={{ background: "#0ea5e9", fontSize: "9px" }}
               >
                 {getInitials(ticket.assignedTo.name)}
               </span>
-              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              <span className="text-xs truncate min-w-0" style={{ color: "var(--text-secondary)" }} title={ticket.assignedTo.name}>
                 {ticket.assignedTo.name}
               </span>
             </div>
