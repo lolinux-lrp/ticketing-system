@@ -21,8 +21,9 @@ TicketFlow is a robust, autonomous helpdesk platform engineered for modern organ
 Our backend autonomously monitors a connected Gmail inbox for incoming support emails. When an email arrives, the ingestion engine:
 - **Smart Routing:** Evaluates the sender's email domain against our registered projects. If a domain strictly matches a project, the ticket is routed accordingly. Unmapped domains safely fall back to the "Other" project category to preserve strict database relational constraints without mutating the project table unexpectedly.
 - **Parses & Sanitizes:** Extracts the sender, subject, and text body, stripping out HTML and malformed characters.
+- **Inbound Broadcast Echoing:** Synchronizes incoming client replies by echoing them outwards to all CC'd ticket watchers, simulating enterprise helpdesk platforms (e.g., Zendesk).
 - **Spam & Noise Filtering:** Automatically rejects automated newsletters, no-reply addresses, and calendar invites so agents aren't overwhelmed with junk tickets.
-- **Thread Tracking:** Utilizes the RFC 2822 `Message-ID` to guarantee idempotency and prevent duplicate processing if a network failure occurs after Gmail ingestion.
+- **Thread Tracking:** Utilizes the RFC 2822 `Message-ID` to guarantee idempotency, preserve Gmail threading logic, and prevent duplicate processing if a network failure occurs after Gmail ingestion.
 
 ### 2. Automated SLA Escalation Engine (`/api/cron/check-sla`)
 The system guarantees response times using a two-tier Service Level Agreement (SLA) escalation workflow:
@@ -39,11 +40,11 @@ The web interface provides a robust workspace for support agents and administrat
 ### 4. Uncapped CSV Export
 The `/api/tickets/export` endpoint shares a centralized Prisma filter builder (`src/lib/filters.ts`) with the dashboard. This ensures 100% parity: clicking the "Export CSV" button safely aggregates all active UI parameters and downloads a complete, strictly-filtered CSV without pagination caps.
 
-### 5. Interactive Ticket Comments
-Tickets support robust, threaded conversation threads.
-- Agents, Admins, and Customers can communicate directly on a ticket.
-- Enforces strict RBAC (Customers can only comment on their own tickets).
-- UI utilizes resilient flexbox spacing and truncation to handle large comment blocks gracefully.
+### 5. Threaded Email Conversations & UI Gateway
+Unlike proprietary dashboards, TicketFlow fully leverages email as the ultimate source of truth, tearing down isolated web comments.
+- **Outbound UI Reply Gateway:** Agents reply directly from the web dashboard. The system compiles a standard MIME email encapsulating the agent's signature, a collapsed Quoted History block, and pushes it natively out via the Gmail API so that standard email clients receive it perfectly threaded.
+- **Granular CC/BCC Handling:** The platform tracks persistent CC watchers across the lifecycle of the ticket without creating unwanted user accounts in the database.
+- **Email Trimmer:** Sophisticated RegEx sanitizers cleanly sever trailing quote histories when clients reply via their standard email app, guaranteeing a clean timeline rendering on the web dashboard.
 
 ### 6. Meeting & Calendar Integration
 The app includes features to schedule meetings directly related to tickets. 
@@ -54,11 +55,16 @@ The app includes features to schedule meetings directly related to tickets.
 
 ### 7. Role-Based Access Control (RBAC)
 The platform is secured by NextAuth and enforces strict boundaries:
-- **Customers:** Can only view, comment on, and export their own submitted tickets.
+- **Customers:** Can only view their own submitted tickets via email. Unauthorized POST payload modifications strictly fail closed.
 - **Agents:** Can view and manage all tickets, update statuses, schedule meetings, and take assignments.
 - **Admins:** Have full control over system configuration, project creation, and agent invitations.
 
-### 8. Type-Safe Email Template Engine
+### 8. High-Performance PostgreSQL Indexing
+The database is heavily optimized with multi-column composite indices to guarantee sub-millisecond querying without expensive sorting:
+- **Generalized Inverted Index (GIN):** Native full-text `searchVector` querying on Tickets eliminates sequential table scans.
+- **Composite Sort Indices:** Strict composite indices over `(ticketId, createdAt, id)` and `(status, lastActivityAt)` dramatically accelerate dashboard filtering and chronologically ordered timeline rendering.
+
+### 9. Type-Safe Email Template Engine
 Located in `src/lib/email-templates/`, the centralized email engine decouples complex backend logic from MIME string formatting. It relies on strict TypeScript interfaces to guarantee that variables passed to email templates are strictly typed. All user inputs are rigorously passed through an `escapeHtml` utility to mitigate Cross-Site Scripting (XSS).
 
 ---
