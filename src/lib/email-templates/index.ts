@@ -1,7 +1,8 @@
-import { RenderedEmail, SLABreachAdminVariables, SLAExecEscalationVariables, ProjectExpirationVariables } from './types';
+import { RenderedEmail, SLABreachAdminVariables, SLAExecEscalationVariables, ProjectExpirationVariables, TicketClosedBounceVariables } from './types';
 import { renderSLAAdminWarning } from './sla-admin-warning';
 import { renderSLAExecEscalation } from './sla-exec-escalation';
 import { renderProjectExpiration } from './project-expiration';
+import { renderTicketClosedBounce } from './ticket-closed-bounce';
 
 // Sanitize CRLF injection from subject lines
 function sanitizeEmailHeader(input: string): string {
@@ -46,6 +47,10 @@ export const EmailTemplates = {
   renderProjectExpiration: (vars: ProjectExpirationVariables, customSubject?: string, customBody?: string): RenderedEmail => {
     const rendered = renderProjectExpiration(vars, customSubject, customBody);
     return { ...rendered, subject: sanitizeEmailHeader(rendered.subject) };
+  },
+  renderTicketClosedBounce: (vars: TicketClosedBounceVariables): RenderedEmail => {
+    const rendered = renderTicketClosedBounce(vars);
+    return { ...rendered, subject: sanitizeEmailHeader(rendered.subject) };
   }
 };
 
@@ -54,7 +59,10 @@ export const EmailTemplates = {
  */
 export interface MimeOptions {
   messageId?: string;
+  cc?: string;
   bcc?: string;
+  inReplyTo?: string;
+  references?: string;
 }
 
 export function buildMimeMessage(
@@ -72,8 +80,23 @@ export function buildMimeMessage(
     `MIME-Version: 1.0`
   ];
 
-  if (opts?.messageId) headers.push(`Message-ID: <${sanitizeEmailHeader(opts.messageId)}>`);
+  if (opts?.messageId) {
+    const mId = sanitizeEmailHeader(opts.messageId);
+    headers.push(`Message-ID: ${mId.startsWith('<') ? mId : `<${mId}>`}`);
+  }
+  if (opts?.cc) headers.push(`Cc: ${sanitizeEmailHeader(opts.cc)}`);
   if (opts?.bcc) headers.push(`Bcc: ${sanitizeEmailHeader(opts.bcc)}`);
+  if (opts?.inReplyTo) {
+    const inRep = sanitizeEmailHeader(opts.inReplyTo);
+    headers.push(`In-Reply-To: ${inRep.startsWith('<') ? inRep : `<${inRep}>`}`);
+  }
+  if (opts?.references) {
+    const refs = sanitizeEmailHeader(opts.references)
+      .split(/\s+/)
+      .map(r => r.startsWith('<') ? r : `<${r}>`)
+      .join(' ');
+    headers.push(`References: ${refs}`);
+  }
 
   headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
 

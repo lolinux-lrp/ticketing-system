@@ -24,3 +24,10 @@ export interface ProjectExpirationVariables {
   projectName: string;
   emailSubject: string;
 }
+
+export interface TicketClosedBounceVariables {
+  ticketId: string;
+  ticketTitle: string;
+  senderName: string;
+  supportUrl: string;
+}

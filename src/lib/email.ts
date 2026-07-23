@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { google } from "googleapis";
 import type { MeetingEmailPayload } from "@/types/meeting";
 import { 
   generateMeetingInvitationEmail,
@@ -28,17 +29,54 @@ const EMAIL_CONFIG: EmailConfig = {
   backgroundColor: "#f8f8f8",
 };
 
+interface NodemailerMail {
+  data: nodemailer.SendMailOptions & { threadId?: string };
+  message: {
+    build(callback: (err: Error | null, messageData: Buffer) => void): void;
+    getEnvelope(): Record<string, unknown>;
+    getHeader(name: string): string | string[] | undefined;
+  };
+}
+
 function createTransport() {
-  if (process.env.GOOGLE_EMAIL && process.env.GOOGLE_REFRESH_TOKEN) {
+  if (process.env.GOOGLE_EMAIL && (process.env.GOOGLE_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN)) {
     return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        type: "OAuth2",
-        user: process.env.GOOGLE_EMAIL,
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-      },
+      name: 'GmailAPI',
+      version: '1.0.0',
+      send: (mail: unknown, callback: (err: Error | null, info?: unknown) => void) => {
+        const customMail = mail as NodemailerMail;
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET
+        );
+        const refreshToken = process.env.GMAIL_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN;
+        oauth2Client.setCredentials({ refresh_token: refreshToken });
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+        customMail.message.build((err: Error | null, messageData: Buffer) => {
+          if (err) return callback(err, null);
+          const encodedMessage = messageData
+            .toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+            
+          gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { 
+              raw: encodedMessage,
+              threadId: customMail.data.threadId || undefined 
+            }
+          }).then(res => {
+            callback(null, {
+              envelope: customMail.message.getEnvelope(),
+              messageId: (customMail.message.getHeader('message-id') as string) || res.data.id
+            });
+          }).catch(sendErr => {
+            callback(sendErr instanceof Error ? sendErr : new Error(String(sendErr)));
+          });
+        });
+      }
     });
   }
 
@@ -147,6 +185,8 @@ interface NewTicketNotificationOptions {
   ticketTitle: string;
   projectName: string;
   ticketId: string;
+  messageId?: string;
+  threadId?: string;
 }
 
 export async function sendNewTicketNotification({
@@ -154,6 +194,8 @@ export async function sendNewTicketNotification({
   ticketTitle,
   projectName,
   ticketId,
+  messageId,
+  threadId,
 }: NewTicketNotificationOptions) {
   const transport = createTransport();
   const ticketUrl = `${APP_BASE_URL}/tickets/${ticketId}`;
@@ -165,7 +207,7 @@ export async function sendNewTicketNotification({
   await transport.sendMail({
     to,
     from,
-    subject: `New Ticket Created: ${ticketTitle}`,
+    subject: ticketTitle.toLowerCase().startsWith('re:') ? ticketTitle : `Re: ${ticketTitle}`,
     text: `Your ticket "${ticketTitle}" has been successfully created for project ${projectName}.\n\nView it here: ${ticketUrl}\n\n— TicketFlow`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
@@ -178,7 +220,10 @@ export async function sendNewTicketNotification({
         <p style="margin-top:24px;color:#888;font-size:12px;">— TicketFlow</p>
       </div>
     `,
-  });
+    inReplyTo: messageId,
+    references: messageId,
+    threadId,
+  } as nodemailer.SendMailOptions & { threadId?: string });
 }
 
 // ---------------------------------------------------------------------------

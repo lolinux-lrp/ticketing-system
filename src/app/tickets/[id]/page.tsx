@@ -9,11 +9,12 @@ import {
   useUpdateTicketMutation,
 } from "@/store/ticketsApi";
 import { useGetAgentsQuery } from "@/store/usersApi";
-import { TicketCommentsSection } from "@/components/comments/TicketCommentsSection";
+import { TicketTimelineSection } from "@/components/timeline/TicketTimelineSection";
 import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
 import { StatusBadge } from "@/components/tickets/StatusBadge";
 import { PriorityBadge } from "@/components/tickets/PriorityBadge";
 import { TicketMeetingsCard } from "@/components/tickets/TicketMeetingsCard";
+import { TicketReplyBox } from "@/components/tickets/TicketReplyBox";
 import type { Status, Priority, Ticket } from "@/types";
 import { formatResolutionTime } from "@/lib/utils/resolutionTime";
 
@@ -171,8 +172,10 @@ export default function TicketDetailPage() {
               border: "1px solid var(--border)",
             }}
           >
-            <TicketCommentsSection ticketId={ticketId} />
+            <TicketTimelineSection messages={ticket.messages || []} />
           </div>
+          
+          <TicketReplyBox ticket={ticket} ticketId={ticketId} />
         </div>
 
         <div
