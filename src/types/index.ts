@@ -1,6 +1,6 @@
-import { Status, Priority, Role, Ticket as PrismaTicket, Comment as PrismaComment, Project as PrismaProject, ProjectDomain } from "@prisma/client";
+import { Status, Priority, Role, Ticket as PrismaTicket, Project as PrismaProject, ProjectDomain, TicketMessage as PrismaTicketMessage, TicketMessageSenderType } from "@prisma/client";
 
-export { Status, Priority, Role };
+export { Status, Priority, Role, TicketMessageSenderType };
 
 export interface Project extends PrismaProject {
   domains: ProjectDomain[];
@@ -14,17 +14,23 @@ export interface TicketUser {
   email?: string;
 }
 
-export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "description" | "resolution" | "contactEmail" | "searchVector" | "resolvedAt"> {
+export interface TicketMessage extends Omit<PrismaTicketMessage, "createdAt"> {
+  createdAt: string;
+}
+
+export interface Ticket extends Omit<PrismaTicket, "createdAt" | "updatedAt" | "lastActivityAt" | "description" | "resolution" | "contactEmail" | "searchVector" | "resolvedAt"> {
   description?: string;
   resolution: string | null;
   searchVector?: unknown;
   createdAt: string;
   updatedAt: string;
+  lastActivityAt: string;
   resolvedAt: string | null;
   createdBy: TicketUser;
   assignedTo: TicketUser | null;
   project?: { id: string; name: string } | null;
   contactEmail?: string | null;
+  messages?: TicketMessage[];
 }
 
 export interface GetTicketsParams {
@@ -38,6 +44,8 @@ export interface GetTicketsParams {
   startDate?: string;
   endDate?: string;
   assignedToId?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface CreateTicketPayload {
@@ -47,6 +55,14 @@ export interface CreateTicketPayload {
   createdById: string;
   projectId?: string;
   contactEmail?: string | null;
+}
+
+export interface CreateTicketMessagePayload {
+  content: string;
+  to?: string;
+  cc?: string;
+  bcc?: string;
+  newStatus?: Status;
 }
 
 export interface UpdateTicketPayload {
@@ -63,18 +79,4 @@ export interface DeleteTicketResponse {
   data: Ticket;
 }
 
-export interface Comment extends Omit<PrismaComment, "createdAt" | "updatedAt"> {
-  createdAt: string;
-  updatedAt: string;
-  author: TicketUser;
-}
 
-export interface CreateCommentPayload {
-  ticketId: string;
-  authorId: string;
-  content: string;
-}
-
-export interface GetCommentsParams {
-  ticketId: string;
-}
