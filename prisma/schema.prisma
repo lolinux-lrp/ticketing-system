@@ -91,14 +91,18 @@ model Ticket {
   assignedToId String?
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
+  lastActivityAt DateTime               @default(now())
   searchVector Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(description, ''::text)))"))
   contactEmail String?
+  ccEmails     String[]                 @default([])
   projectId        String?
   resolution       String?
   resolvedAt       DateTime?
   adminEscalatedAt DateTime?
   execEscalatedAt  DateTime?
+  threadId         String?
   comments         Comment[]
+  messages         TicketMessage[]
   meetings     Meeting[]
   assignedTo   User?                    @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: Restrict)
   createdBy    User                     @relation("CreatedTickets", fields: [createdById], references: [id])
@@ -111,6 +115,10 @@ model Ticket {
   @@index([status, createdAt])
   @@index([priority, createdAt])
   @@index([projectId])
+  @@index([lastActivityAt])
+  @@index([threadId])
+  @@index([searchVector], type: Gin)
+  @@index([status, lastActivityAt])
 }
 
 model Comment {
@@ -120,7 +128,7 @@ model Comment {
   authorId  String
   createdAt DateTime @default(now())
   author    User     @relation(fields: [authorId], references: [id])
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@index([authorId])
@@ -140,11 +148,12 @@ model Meeting {
   updatedAt             DateTime          @updatedAt
   reminderSentAt        DateTime?
   createdBy             User              @relation("MeetingHost", fields: [createdById], references: [id])
-  ticket                Ticket?           @relation(fields: [ticketId], references: [id])
+  ticket                Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   attendees             MeetingAttendee[]
 
   @@index([ticketId])
   @@index([createdById])
+  @@index([reminderSentAt, startTime])
 }
 
 model MeetingAttendee {
@@ -192,4 +201,29 @@ model ProcessedMessage {
   status    String   @default("PROCESSING")
   lockedAt  DateTime @default(now())
   createdAt DateTime @default(now())
+
+  @@index([status, lockedAt])
 }
+
+enum TicketMessageSenderType {
+  CLIENT
+  AGENT
+  SYSTEM
+}
+
+model TicketMessage {
+  id          String                  @id @default(uuid())
+  ticketId    String
+  ticket      Ticket                  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType  TicketMessageSenderType
+  senderEmail String
+  content     String                  @db.Text
+  to          String?
+  cc          String?
+  bcc         String?
+  messageId   String?                 @unique
+  createdAt   DateTime                @default(now())
+
+  @@index([ticketId, createdAt, id])
+}
+
