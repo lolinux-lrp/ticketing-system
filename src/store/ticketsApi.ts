@@ -1,9 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   CreateTicketPayload,
+  CreateTicketMessagePayload,
   DeleteTicketResponse,
   GetTicketsParams,
   Ticket,
+  TicketMessage,
   UpdateTicketPayload,
 } from "@/types";
 
@@ -20,6 +22,7 @@ interface GetProjectsResponse {
 
 interface GetTicketsResponse {
   data: Ticket[];
+  totalCount: number;
 }
 
 export const ticketsApi = createApi({
@@ -29,16 +32,16 @@ export const ticketsApi = createApi({
   refetchOnFocus: true,
   refetchOnReconnect: true,
   endpoints: (builder) => ({
-    getTickets: builder.query<Ticket[], GetTicketsParams | void>({
+    getTickets: builder.query<{ data: Ticket[]; totalCount: number }, GetTicketsParams | void>({
       query: (params) => ({
         url: "tickets",
         params: params ?? undefined,
       }),
-      transformResponse: (response: GetTicketsResponse) => response.data,
+      transformResponse: (response: GetTicketsResponse) => response,
       providesTags: (result) =>
-        result
+        result?.data
           ? [
-              ...result.map(({ id }) => ({ type: "Ticket" as const, id })),
+              ...result.data.map(({ id }) => ({ type: "Ticket" as const, id })),
               { type: "Ticket" as const, id: "LIST" },
             ]
           : [{ type: "Ticket" as const, id: "LIST" }],
@@ -101,6 +104,20 @@ export const ticketsApi = createApi({
       query: (id) => `tickets/${id}`,
       providesTags: (result, error, id) => [{ type: "Ticket", id }],
     }),
+    createTicketMessage: builder.mutation<
+      TicketMessage,
+      { id: string; body: CreateTicketMessagePayload }
+    >({
+      query: ({ id, body }) => ({
+        url: `tickets/${id}/messages`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Ticket", id },
+        { type: "Ticket", id: "LIST" },
+      ],
+    }),
     getProjects: builder.query<Project[], void>({
       query: () => "projects",
       transformResponse: (response: GetProjectsResponse) => response.data,
@@ -115,4 +132,5 @@ export const {
   useUpdateTicketMutation,
   useDeleteTicketMutation,
   useGetProjectsQuery,
+  useCreateTicketMessageMutation,
 } = ticketsApi;

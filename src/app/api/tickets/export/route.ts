@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -41,11 +42,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const { sortBy, order } = validation.data;
     const where = buildTicketFilters(validation.data, session.user);
 
     const tickets = await prisma.ticket.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
       include: {
         project: true,
         assignedTo: true,

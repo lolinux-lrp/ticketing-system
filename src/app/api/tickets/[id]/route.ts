@@ -24,6 +24,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         assignedTo: { select: { id: true, name: true, role: true } },
         createdBy: { select: { id: true, name: true, role: true } },
         project: true,
+        messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
       },
     });
 

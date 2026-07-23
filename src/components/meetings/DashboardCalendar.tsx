@@ -103,7 +103,7 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
           )}
 
           <div className="flex gap-8">
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Host</p>
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-6 h-6 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center text-[10px] font-bold">
@@ -111,12 +111,12 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
                 </div>
                 <span className="text-sm font-medium truncate min-w-0" style={{ color: "var(--text-primary)" }} title={meeting.createdBy.name || meeting.createdBy.email || undefined}>
                   {meeting.createdBy.name || meeting.createdBy.email}
-                  {amIHost && " (You)"}
                 </span>
+                {amIHost && <span className="text-sm font-medium shrink-0" style={{ color: "var(--text-primary)" }}> (You)</span>}
               </div>
             </div>
 
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Attendees</p>
               <div className="flex flex-col gap-2">
                 {meeting.attendees.map(a => (
@@ -126,9 +126,9 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
                     </div>
                     <span className="text-sm truncate min-w-0" style={{ color: "var(--text-secondary)" }} title={a.user.name || a.user.email || undefined}>
                       {a.user.name || a.user.email}
-                      {a.userId === session?.user?.id && " (You)"}
                     </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    {a.userId === session?.user?.id && <span className="text-sm shrink-0" style={{ color: "var(--text-secondary)" }}> (You)</span>}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap ${
                       a.status === 'ACCEPTED' ? 'bg-emerald-500/10 text-emerald-600' :
                       a.status === 'DECLINED' ? 'bg-rose-500/10 text-rose-600' :
                       'bg-amber-500/10 text-amber-600'

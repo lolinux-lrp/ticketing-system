@@ -203,11 +203,19 @@ export function TicketFilters({
             setIsExporting(true);
             try {
               const params = new URLSearchParams();
-              Object.entries(filters).forEach(([key, value]) => {
+              const allowedKeys = ["search", "status", "priority", "createdById", "projectId", "startDate", "endDate", "assignedToId", "sortBy", "order"] as const;
+              
+              allowedKeys.forEach(key => {
+                const value = filters[key as keyof typeof filters];
                 if (value !== undefined && value !== null && value !== "") {
                   params.set(key, String(value));
                 }
               });
+
+              if (filters.mine && session?.user?.id) {
+                params.set("createdById", session.user.id);
+              }
+
               const res = await fetch(`/api/tickets/export?${params.toString()}`);
               if (!res.ok) throw new Error("Export failed");
               const blob = await res.blob();
@@ -220,7 +228,8 @@ export function TicketFilters({
               a.remove();
               window.URL.revokeObjectURL(url);
             } catch (err) {
-              console.error(err);
+              console.error("Export error:", err);
+              alert("Failed to export tickets. Please try again.");
             } finally {
               setIsExporting(false);
             }
@@ -255,11 +264,12 @@ export function TicketFilters({
           ))}
         </select>
         <select
-          value={filters.sortBy ?? "createdAt"}
-          onChange={(e) => onChange({ ...filters, sortBy: e.target.value })}
+          value={filters.sortBy === "lastActivityAt" ? "none" : (filters.sortBy ?? "none")}
+          onChange={(e) => onChange({ ...filters, sortBy: e.target.value === "none" ? "lastActivityAt" : e.target.value })}
           className="input-base"
           style={{ padding: "5px 8px", fontSize: "12px", width: "auto" }}
         >
+          <option value="none">Sort: Default (Last Active)</option>
           <option value="createdAt">Sort: Created</option>
           <option value="updatedAt">Sort: Updated</option>
           <option value="priority">Sort: Priority</option>

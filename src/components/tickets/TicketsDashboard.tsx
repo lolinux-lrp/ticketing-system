@@ -18,7 +18,7 @@ export function TicketsDashboard() {
   };
 
   const {
-    data: tickets,
+    data: ticketsResponse,
     isLoading,
     isFetching,
     isError,
@@ -28,6 +28,14 @@ export function TicketsDashboard() {
   const hasActiveFilters = Boolean(
     filters.status || filters.priority || filters.search || filters.mine
   );
+
+  const tickets = ticketsResponse?.data;
+  const totalCount = ticketsResponse?.totalCount || 0;
+  const page = filters.page || 1;
+  const limit = 50;
+  const startIdx = totalCount === 0 ? 0 : (page - 1) * limit + 1;
+  const endIdx = Math.min(page * limit, totalCount);
+  const totalPages = Math.ceil(totalCount / limit);
 
   return (
     <div
@@ -54,8 +62,10 @@ export function TicketsDashboard() {
         }}
       >
         <span>
-          {tickets
-            ? `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`
+          {ticketsResponse
+            ? totalCount > 0
+              ? `Showing ${startIdx}-${endIdx} of ${totalCount} ticket${totalCount === 1 ? "" : "s"}`
+              : "0 tickets"
             : "Loading..."}
           {isFetching && !isLoading && (
             <span className="ml-2 animate-pulse">· refreshing</span>
@@ -138,24 +148,61 @@ export function TicketsDashboard() {
 
         {/* Table */}
         {!isLoading && !isError && tickets && tickets.length > 0 && (
-          <table className="data-grid w-full table-fixed min-w-[800px]">
-            <thead>
-              <tr>
-                <th style={{ width: "72px" }}>ID</th>
-                <th>Title</th>
-                <th style={{ width: "130px" }}>Status</th>
-                <th style={{ width: "110px" }}>Priority</th>
-                <th style={{ width: "140px" }}>Assignee</th>
-                <th style={{ width: "140px" }}>Created</th>
-                <th style={{ width: "110px" }} />
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((ticket) => (
-                <TicketRow key={ticket.id} ticket={ticket} />
-              ))}
-            </tbody>
-          </table>
+          <>
+            <table className="data-grid w-full table-fixed min-w-[800px]">
+              <thead>
+                <tr>
+                  <th style={{ width: "72px" }}>ID</th>
+                  <th>Title</th>
+                  <th style={{ width: "130px" }}>Status</th>
+                  <th style={{ width: "110px" }}>Priority</th>
+                  <th style={{ width: "140px" }}>Assignee</th>
+                  <th style={{ width: "140px" }}>Created</th>
+                  <th style={{ width: "110px" }} />
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map((ticket) => (
+                  <TicketRow key={ticket.id} ticket={ticket} />
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/* Pagination Controls */}
+        {!isLoading && !isError && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+            <div className="text-xs text-muted" style={{ color: "var(--text-muted)" }}>
+              Page {page} of {totalPages}
+            </div>
+            <div className="flex gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setFilters({ ...filters, page: page - 1 })}
+                className="px-3 py-1 text-xs font-medium rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: "var(--border)",
+                  background: "var(--surface-0)",
+                  color: "var(--text-primary)"
+                }}
+              >
+                Previous
+              </button>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setFilters({ ...filters, page: page + 1 })}
+                className="px-3 py-1 text-xs font-medium rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: "var(--border)",
+                  background: "var(--surface-0)",
+                  color: "var(--text-primary)"
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

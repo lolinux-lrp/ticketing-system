@@ -19,6 +19,7 @@ export interface TicketFiltersState {
   startDate?: string;
   endDate?: string;
   assignedToId?: string;
+  page?: number;
 }
 
 const VALID_STATUS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -53,6 +54,7 @@ export function useTicketFilters() {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const assignedToId = searchParams.get("assignedToId");
+    const page = searchParams.get("page");
 
     return {
       status: VALID_STATUS.includes(status as Status)
@@ -63,13 +65,14 @@ export function useTicketFilters() {
         : undefined,
       search: search || undefined,
       sortBy:
-        sortBy && VALID_SORT_FIELDS.includes(sortBy) ? sortBy : "createdAt",
+        sortBy && VALID_SORT_FIELDS.includes(sortBy) ? sortBy : "lastActivityAt",
       order: order === "asc" ? "asc" : "desc",
       projectId: projectId || undefined,
       mine: mine === "true",
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       assignedToId: assignedToId || undefined,
+      page: page ? parseInt(page, 10) : 1,
     };
   }, [searchParams]);
 
@@ -79,7 +82,7 @@ export function useTicketFilters() {
       if (next.status) params.set("status", next.status);
       if (next.priority) params.set("priority", next.priority);
       if (next.search) params.set("search", next.search);
-      if (next.sortBy && next.sortBy !== "createdAt") {
+      if (next.sortBy && next.sortBy !== "lastActivityAt") {
         params.set("sortBy", next.sortBy);
       }
       if (next.order && next.order !== "desc") {
@@ -90,6 +93,7 @@ export function useTicketFilters() {
       if (next.startDate) params.set("startDate", next.startDate);
       if (next.endDate) params.set("endDate", next.endDate);
       if (next.assignedToId) params.set("assignedToId", next.assignedToId);
+      if (next.page && next.page > 1) params.set("page", next.page.toString());
 
       const queryString = params.toString();
       router.replace(queryString ? `${pathname}?${queryString}` : pathname, {

@@ -83,30 +83,35 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { sortBy, order } = validation.data;
+    const { sortBy, order, page, limit } = validation.data;
 
     const where = buildTicketFilters(validation.data, session.user);
 
-    const tickets = await prisma.ticket.findMany({
-      where,
-      orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
-      take: 50,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        priority: true,
-        createdAt: true,
-        updatedAt: true,
-        assignedToId: true,
-        createdById: true,
-        assignedTo: { select: { id: true, name: true, role: true } },
-        createdBy: { select: { id: true, name: true, role: true } },
-        project: { select: { id: true, name: true } },
-      },
-    });
+    const [tickets, totalCount] = await prisma.$transaction([
+      prisma.ticket.findMany({
+        where,
+        orderBy: { [sortBy]: order } as Prisma.TicketOrderByWithRelationInput,
+        take: limit,
+        skip: (page - 1) * limit,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          createdAt: true,
+          updatedAt: true,
+          lastActivityAt: true,
+          assignedToId: true,
+          createdById: true,
+          assignedTo: { select: { id: true, name: true, role: true } },
+          createdBy: { select: { id: true, name: true, role: true } },
+          project: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.ticket.count({ where }),
+    ]);
 
-    return NextResponse.json({ data: tickets });
+    return NextResponse.json({ data: tickets, totalCount });
   } catch (error) {
     console.error("Error fetching tickets: ", error);
     return NextResponse.json(
