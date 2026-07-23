@@ -3,7 +3,9 @@ import crypto from 'crypto';
 import { google, gmail_v1 } from 'googleapis';
 import { prisma } from '@/lib/prisma';
 import { Priority, Role, Prisma } from '@prisma/client';
-import { EmailTemplates, buildMimeMessage } from '@/lib/email-templates';
+import { EmailTemplates, buildMimeMessage, escapeHtml } from '@/lib/email-templates';
+import { sendNewTicketNotification } from '@/lib/email';
+import { trimIncomingEmail } from '@/lib/email-trimmer';
 
 export async function GET(req: NextRequest) {
   try {
@@ -78,6 +80,12 @@ export async function GET(req: NextRequest) {
 
       let fromHeader = '';
       let subject = '(No Subject)';
+      let messageId = '';
+      let inReplyTo = '';
+      let references = '';
+      let toHeader = '';
+      let ccHeader = '';
+      let bccHeader = '';
       let autoSubmitted = false;
       let isNewsletter = false;
 
@@ -85,6 +93,12 @@ export async function GET(req: NextRequest) {
         const name = h.name?.toLowerCase();
         if (name === 'from') fromHeader = h.value || '';
         if (name === 'subject') subject = h.value || '';
+        if (name === 'message-id') messageId = h.value || '';
+        if (name === 'in-reply-to') inReplyTo = h.value || '';
+        if (name === 'references') references = h.value || '';
+        if (name === 'to') toHeader = h.value || '';
+        if (name === 'cc') ccHeader = h.value || '';
+        if (name === 'bcc') bccHeader = h.value || '';
         if (name === 'auto-submitted' && h.value !== 'no') autoSubmitted = true;
         if (name === 'x-autoreply') autoSubmitted = true;
         if (name === 'list-unsubscribe' || name === 'list-id') isNewsletter = true;
@@ -122,6 +136,19 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      const allExtractedCcs: string[] = [];
+      if (ccHeader) {
+        const ccParts = ccHeader.split(',');
+        for (const part of ccParts) {
+          const match = part.match(/<(.+?)>/);
+          let email = match ? match[1].trim() : part.trim();
+          email = email.toLowerCase().replace(/[<>]/g, '');
+          if (email && !email.includes('support@') && email !== process.env.DEFAULT_FROM_EMAIL) {
+            allExtractedCcs.push(email);
+          }
+        }
+      }
+
       let rawBody = '';
 
       function extractBody(part: gmail_v1.Schema$MessagePart) {
@@ -143,15 +170,7 @@ export async function GET(req: NextRequest) {
 
       if (payload) extractBody(payload);
 
-      let cleanedBody = rawBody.trim();
-      // Strip reply chains
-      const replyTriggers = [/On\s+.*wrote:/i, /-----Original Message-----/i];
-      for (const trigger of replyTriggers) {
-        const idx = cleanedBody.search(trigger);
-        if (idx !== -1) {
-          cleanedBody = cleanedBody.substring(0, idx).trim();
-        }
-      }
+      let cleanedBody = trimIncomingEmail(rawBody);
 
       if (!cleanedBody) cleanedBody = '(No Content)';
 
@@ -301,6 +320,173 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      const googleThreadId = fullMsg.data.threadId;
+      const cleanMessageId = messageId.replace(/[<>]/g, '').trim();
+
+      let matchedTicket = null;
+
+      const refs = [inReplyTo, ...references.split(/\s+/)]
+        .map(r => r.replace(/[<>]/g, '').trim())
+        .filter(Boolean);
+
+      const orConditions: Prisma.TicketWhereInput[] = [];
+      
+      if (googleThreadId) {
+        orConditions.push({ threadId: googleThreadId });
+      }
+      if (refs.length > 0) {
+        orConditions.push({
+          messages: {
+            some: {
+              messageId: { in: refs }
+            }
+          }
+        });
+      }
+
+      if (orConditions.length > 0) {
+        matchedTicket = await prisma.ticket.findFirst({
+          where: { OR: orConditions }
+        });
+      }
+
+      if (matchedTicket) {
+        if (matchedTicket.status === 'CLOSED' || matchedTicket.status === 'RESOLVED') {
+          // PATH A: Bounce closed ticket
+          const rendered = EmailTemplates.renderTicketClosedBounce({
+            ticketId: matchedTicket.id,
+            ticketTitle: matchedTicket.title,
+            senderName,
+            supportUrl: `${process.env.APP_BASE_URL || 'http://localhost:3000'}/login`
+          });
+          
+          const fromAddress = process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com";
+          const encodedMessage = buildMimeMessage(senderEmail, `"TicketFlow" <${fromAddress}>`, rendered, {
+            inReplyTo: messageId,
+            references: [inReplyTo, messageId].filter(Boolean).join(' ')
+          });
+          
+          await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw: encodedMessage }
+          });
+
+          await gmail.users.messages.modify({
+            userId: 'me',
+            id: msg.id,
+            requestBody: { removeLabelIds: ['UNREAD'] }
+          });
+
+          continue;
+        }
+
+        // Merge CCs
+        const updatedCcEmails = Array.from(new Set([...matchedTicket.ccEmails, ...allExtractedCcs]));
+
+        // PATH B: Active conversation
+        await prisma.ticketMessage.create({
+          data: {
+            ticketId: matchedTicket.id,
+            senderType: 'CLIENT',
+            senderEmail,
+            content: cleanedBody,
+            to: toHeader || null,
+            cc: ccHeader || null,
+            bcc: bccHeader || null,
+            messageId: cleanMessageId || null
+          }
+        });
+
+        await prisma.ticket.update({
+          where: { id: matchedTicket.id },
+          data: { 
+            lastActivityAt: new Date(),
+            ccEmails: updatedCcEmails
+          }
+        });
+
+        // Inbound Broadcast Echo
+        const recipientsToEcho: string[] = [...updatedCcEmails];
+        if (matchedTicket.assignedToId) {
+          const agent = await prisma.user.findUnique({ where: { id: matchedTicket.assignedToId } });
+          if (agent && agent.email && agent.email !== senderEmail) {
+            recipientsToEcho.push(agent.email);
+          }
+        }
+
+        const creator = await prisma.user.findUnique({ where: { id: matchedTicket.createdById } });
+        if (creator && creator.email && creator.email !== senderEmail) {
+          recipientsToEcho.push(creator.email);
+        }
+
+        const directRecipients = new Set([
+          ...toHeader.split(',').map(e => {
+            const match = e.match(/<(.+?)>/);
+            return (match ? match[1] : e).toLowerCase().replace(/[<>]/g, '').trim();
+          }),
+          ...ccHeader.split(',').map(e => {
+            const match = e.match(/<(.+?)>/);
+            return (match ? match[1] : e).toLowerCase().replace(/[<>]/g, '').trim();
+          })
+        ].filter(Boolean));
+
+        const systemEmail = (process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com").toLowerCase();
+
+        const finalEchoRecipients = Array.from(new Set(recipientsToEcho)).filter(e => 
+          e !== senderEmail && 
+          e !== systemEmail &&
+          !e.includes('support@') &&
+          !directRecipients.has(e)
+        );
+
+        if (finalEchoRecipients.length > 0) {
+          const fromAddress = systemEmail;
+          
+          const attributedPlainText = `[Reply from: ${senderEmail} via TicketFlow]\n\n${cleanedBody}`;
+          const attributedHtml = `<p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">[Reply from: <strong>${escapeHtml(senderEmail)}</strong> via TicketFlow]</p><p>${escapeHtml(cleanedBody).replace(/\n/g, '<br/>')}</p>`;
+
+          const renderedEmail = {
+            subject: subject,
+            html: attributedHtml,
+            plainText: attributedPlainText
+          };
+
+          const encodedMessage = buildMimeMessage(
+            finalEchoRecipients.join(', '), 
+            `"TicketFlow" <${fromAddress}>`, 
+            renderedEmail, 
+            {
+              inReplyTo: messageId,
+              references: [inReplyTo, messageId].filter(Boolean).join(' ')
+            }
+          );
+
+          await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { 
+              raw: encodedMessage,
+              threadId: googleThreadId || undefined
+            }
+          });
+        }
+
+        await gmail.users.messages.modify({
+          userId: 'me',
+          id: msg.id,
+          requestBody: { removeLabelIds: ['UNREAD'] }
+        });
+
+        processedTickets.push({
+          ticketId: matchedTicket.id,
+          title: matchedTicket.title,
+          priority: matchedTicket.priority,
+          projectName: matchedProject.name
+        });
+        
+        continue;
+      }
+
+      // PATH C: New Ticket
       const ticket = await prisma.ticket.create({
         data: {
           title: subject,
@@ -308,9 +494,32 @@ export async function GET(req: NextRequest) {
           priority: scoredPriority,
           createdById: user.id,
           projectId: matchedProject.id,
-          contactEmail: senderEmail
-        }
+          contactEmail: senderEmail,
+          threadId: googleThreadId || null,
+          ccEmails: Array.from(new Set(allExtractedCcs)),
+          messages: {
+            create: {
+              senderType: 'CLIENT',
+              senderEmail,
+              content: cleanedBody,
+              to: toHeader || null,
+              cc: ccHeader || null,
+              bcc: bccHeader || null,
+              messageId: cleanMessageId || null
+            }
+          }
+        },
+        include: { project: true }
       });
+
+      await sendNewTicketNotification({
+        to: senderEmail,
+        ticketTitle: ticket.title,
+        projectName: ticket.project?.name || "Unknown Project",
+        ticketId: ticket.id,
+        messageId: messageId || undefined,
+        threadId: googleThreadId || undefined
+      }).catch(err => console.error("Failed to send new ticket email:", err));
 
       await gmail.users.messages.modify({
         userId: 'me',

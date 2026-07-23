@@ -61,49 +61,56 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: "No meetings found in this window." }, { status: 200 });
     }
 
-    // 4. Dispatch Reminder Emails Concurrently
-    const dispatchPromises = upcomingMeetings.map(async (meeting) => {
-      // If there are no accepted/pending attendees (including the host), skip
-      if (meeting.attendees.length === 0) return;
+    // 4. Dispatch Reminder Emails Sequentially
+    let rejectedCount = 0;
+    for (const meeting of upcomingMeetings) {
+      try {
+        // If there are no accepted/pending attendees (including the host), skip
+        if (meeting.attendees.length === 0) continue;
 
-      // Atomically claim the meeting
-      const claim = await prisma.meeting.updateMany({
-        where: { id: meeting.id, reminderSentAt: null },
-        data: { reminderSentAt: new Date() }
-      });
+        // Atomically claim the meeting
+        const claim = await prisma.meeting.updateMany({
+          where: { id: meeting.id, reminderSentAt: null },
+          data: { reminderSentAt: new Date() }
+        });
 
-      if (claim.count === 0) return; // Already claimed by another invocation
+        if (claim.count === 0) continue; // Already claimed by another invocation
 
-      const emailPayload: MeetingEmailPayload = {
-        meetingId: meeting.id,
-        sequence: Math.floor(new Date(meeting.updatedAt).getTime() / 1000),
-        title: meeting.title,
-        description: meeting.description ?? undefined,
-        startTimeUtc: meeting.startTime.toISOString(),
-        endTimeUtc: meeting.endTime.toISOString(),
-        meetingUrl: meeting.meetingUrl,
-        host: {
-          id: meeting.createdBy.id,
-          name: meeting.createdBy.name,
-          email: meeting.createdBy.email,
-        },
-        attendees: meeting.attendees
-          .filter((a) => a.userId !== meeting.createdById)
-          .map((a) => ({
-            id: a.user.id,
-            name: a.user.name,
-            email: a.user.email,
-          })),
-        ticketContext: meeting.ticket
-          ? { ticketId: meeting.ticket.id, ticketTitle: meeting.ticket.title }
-          : undefined,
-      };
+        const emailPayload: MeetingEmailPayload = {
+          meetingId: meeting.id,
+          sequence: Math.floor(new Date(meeting.updatedAt).getTime() / 1000),
+          title: meeting.title,
+          description: meeting.description ?? undefined,
+          startTimeUtc: meeting.startTime.toISOString(),
+          endTimeUtc: meeting.endTime.toISOString(),
+          meetingUrl: meeting.meetingUrl,
+          host: {
+            id: meeting.createdBy.id,
+            name: meeting.createdBy.name,
+            email: meeting.createdBy.email,
+          },
+          attendees: meeting.attendees
+            .filter((a) => a.userId !== meeting.createdById)
+            .map((a) => ({
+              id: a.user.id,
+              name: a.user.name,
+              email: a.user.email,
+            })),
+          ticketContext: meeting.ticket
+            ? { ticketId: meeting.ticket.id, ticketTitle: meeting.ticket.title }
+            : undefined,
+        };
 
-      await sendMeetingReminderEmail(emailPayload);
-    });
-
-    const results = await Promise.allSettled(dispatchPromises);
-    const rejectedCount = results.filter((r) => r.status === "rejected").length;
+        await sendMeetingReminderEmail(emailPayload);
+      } catch (err) {
+        await prisma.meeting.update({
+          where: { id: meeting.id },
+          data: { reminderSentAt: null }
+        });
+        console.error(`[Cron Reminders] Failed to send reminder for meeting ${meeting.id}:`, err);
+        rejectedCount++;
+      }
+    }
 
     if (rejectedCount > 0) {
       return NextResponse.json(
