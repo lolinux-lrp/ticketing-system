@@ -16,3 +16,29 @@ export interface EmailIngestionResult {
   processedCount: number;
   newTickets: ProcessedTicketResult[];
 }
+
+export interface PubSubPushPayload {
+  message: {
+    data: string;
+    messageId: string;
+    publishTime: string;
+  };
+  subscription: string;
+}
+
+export interface PubSubDecodedData {
+  emailAddress: string;
+  historyId: number;
+}
+
+export interface GmailWatchResponse {
+  historyId: string;
+  expiration: string;
+}
+
+export interface WatchOperationResult {
+  success: boolean;
+  historyId?: string;
+  expiration?: string;
+  error?: string;
+}
