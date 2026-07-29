@@ -21,6 +21,25 @@ function sanitizeMessageId(id?: string): string | undefined {
   return sanitized;
 }
 
+export function sanitizeThreadSubject(title: string): string {
+  const cleanTitle = title.replace(/^(?:\s*re:\s*)+/gi, '').trim();
+  return `Re: ${cleanTitle}`;
+}
+
+export function constructThreadHeaders(refsArray: string[]): string | undefined {
+  const uniqueRefs = Array.from(new Set(refsArray.filter(Boolean)));
+  let finalRefs = uniqueRefs;
+  if (uniqueRefs.length > 10) {
+    finalRefs = [...uniqueRefs.slice(0, 5), ...uniqueRefs.slice(-5)];
+  }
+  return finalRefs.length > 0 ? finalRefs.join(" ") : undefined;
+}
+
+export function formatEmailHtml(content: string): string {
+  // Enforce a strict wrapper div to prevent global style overrides or display:none injections
+  return `<div style="font-family: sans-serif; font-size: 14px; color: #333333; line-height: 1.5; padding: 0; margin: 0; display: block !important;">${content}</div>`;
+}
+
 /**
  * Strips CRLF characters and surrounding whitespace from a single email
  * address string. Guards against SMTP header injection per OWASP guidelines.
@@ -376,7 +395,7 @@ export async function sendNewTicketNotification({
     to,
     cc: cc.length > 0 ? cc.join(", ") : undefined,
     from,
-    subject: ticketTitle.toLowerCase().startsWith('re:') ? ticketTitle : `Re: ${ticketTitle}`,
+    subject: sanitizeThreadSubject(ticketTitle),
     text: `Your ticket "${ticketTitle}" has been successfully created for project ${projectName}.\n\nView it here: ${ticketUrl}\n\n— TicketFlow`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
@@ -452,7 +471,7 @@ export async function sendTicketReplyEmail({
     additionalCc
   );
 
-  const subject = subjectOverride || (ticket.title.toLowerCase().startsWith('re:') ? ticket.title : `Re: ${ticket.title}`);
+  const subject = subjectOverride || sanitizeThreadSubject(ticket.title);
 
   // 1. Threading: Use the last message if available, otherwise strictly fallback to the root ticket.messageId
   const lastMessage = ticket.messages[0];
@@ -471,12 +490,12 @@ export async function sendTicketReplyEmail({
     .filter((id): id is string => !!id);
     
   // Use a Set to remove duplicates while preserving the chain order
-  const uniqueRefs = Array.from(new Set(refsArray)).slice(-20);
-  const references = uniqueRefs.length > 0 ? uniqueRefs.join(" ") : undefined;
+  const references = constructThreadHeaders(refsArray);
 
   const parsedContent = parseMarkdownToHtml(messageContent);
   const htmlAttribution = `<br/><br/>---<br/>Best regards,<br/>${senderName}<br/>Support Team`;
-  const htmlBody = htmlOverride || `${parsedContent}${htmlAttribution}${htmlQuoteBlock}`;
+  let htmlBody = htmlOverride || `${parsedContent}${htmlAttribution}${htmlQuoteBlock}`;
+  htmlBody = formatEmailHtml(htmlBody);
   
   const textAttribution = `\n\n---\nBest regards,\n${senderName}\nSupport Team`;
   const textBody = htmlOverride ? messageContent : `${messageContent}${textAttribution}`;

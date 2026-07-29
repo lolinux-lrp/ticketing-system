@@ -33,6 +33,7 @@ const MEETING_INCLUDE = {
       id: true, 
       title: true, 
       createdById: true,
+      createdBy: { select: { email: true } },
       contactEmail: true,
       ccEmails: true,
       assignedTo: { select: { email: true } },
@@ -58,13 +59,7 @@ async function fetchMeeting(id: string) {
   });
 }
 
-function formatMeetingTime(date: Date) {
-  return new Intl.DateTimeFormat('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Kolkata',
-  }).format(date) + ' (IST, UTC+05:30)';
-}
+import { formatMeetingTime } from "@/lib/utils/datetime";
 
 
 
@@ -131,6 +126,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     );
     if (!callerAttendeeRow) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    
+    if (meeting.status === "CANCELLED") {
+      return NextResponse.json({ error: "Meeting is already cancelled" }, { status: 400 });
     }
 
     const body: unknown = await req.json();
@@ -203,7 +202,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       if (conflictingMeeting) {
         return NextResponse.json(
           {
-            error: `Scheduling conflict: a participant already has an accepted or pending meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
+            error: `Scheduling conflict: a participant already has a non-cancelled meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
             conflict: {
               meetingId: conflictingMeeting.id,
               startTime: conflictingMeeting.startTime.toISOString(),
@@ -281,6 +280,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
           ccEmails: true, 
           threadId: true,
           messageId: true,
+          createdById: true,
+          createdBy: { select: { email: true } },
           assignedTo: { select: { email: true } },
           messages: { orderBy: { createdAt: "desc" }, take: 1, select: { messageId: true } }
         },
@@ -310,12 +311,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
         revalidatePath("/tickets");
         revalidatePath(`/tickets/${updatedMeeting.ticketId}`);
-        // @ts-expect-error Next.js canary type bug
-        revalidateTag(`ticket-${updatedMeeting.ticketId}`);
-        // @ts-expect-error Next.js canary type bug
-        revalidateTag("tickets");
-        // @ts-expect-error Next.js canary type bug
-        revalidateTag(`meetings`);
+        revalidateTag(`ticket-${updatedMeeting.ticketId}`, "max");
+        revalidateTag("tickets", "max");
+        revalidateTag(`meetings`, "max");
 
         if (updatedMeeting.status === "CANCELLED") {
           broadcastTicketMutation(updatedMeeting.ticketId, "MEETING_CANCELLED");
@@ -323,12 +321,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
           broadcastTicketMutation(updatedMeeting.ticketId, "MEETING_SCHEDULED");
         }
 
-        sendTicketReplyEmail({
-          ticket: ticketForEmail,
-          messageContent: rendered.plainText,
-          htmlOverride: rendered.html,
-          senderName: session.user.name || "TicketFlow Agent",
-        }).then(async ({ messageId, threadId }) => {
+        try {
+          const { messageId, threadId } = await sendTicketReplyEmail({
+            ticket: ticketForEmail,
+            messageContent: rendered.plainText,
+            htmlOverride: rendered.html,
+            senderName: session.user.name || "TicketFlow Agent",
+          });
           if (messageId || threadId) {
             await prisma.ticketMessage.update({
               where: { id: message.id },
@@ -344,7 +343,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
               data: { threadId },
             });
           }
-        }).catch(err => console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err));
+        } catch (err) {
+          console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err);
+        }
       }
     }
 
@@ -379,18 +380,16 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
     }
 
-    // STRICT 403 GUARD: caller must be a participant
-    const isParticipant = meeting.attendees.some(
-      (a) => a.userId === session.user.id
-    );
-    if (!isParticipant) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
+    // STRICT 403 GUARD: caller must be a participant OR ticket creator OR ticket contact
+    const isParticipant = meeting.attendees.some((a) => a.userId === session.user.id);
     const isHost = meeting.createdById === session.user.id;
     const isTicketCreator = meeting.ticket?.createdById === session.user.id;
     const isTicketContact = meeting.ticket?.contactEmail && session.user.email && meeting.ticket.contactEmail === session.user.email;
     
+    if (!isParticipant && !isTicketCreator && !isTicketContact) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Only the meeting host or the main client can cancel the entire meeting
     if (!isHost && !isTicketCreator && !isTicketContact) {
       return NextResponse.json(
@@ -426,12 +425,14 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     if (meeting.ticket) {
       const startStr = formatMeetingTime(meeting.startTime);
       
+      const cancelActor = session.user.name || session.user.email || "a participant";
       const rendered = EmailTemplates.renderMeetingCancelled({
         ticketTitle: meeting.ticket.title,
         startTime: startStr,
+        cancellerName: cancelActor,
       });
 
-      const content = `🚫 Google Meet Session Cancelled\n\nThe scheduled video session for ${startStr} has been cancelled by the host. The room has been dissolved.`;
+      const content = `🚫 Google Meet Session Cancelled\n\nThe scheduled video session for ${startStr} has been cancelled by ${cancelActor}. The room has been dissolved.`;
 
       const message = await prisma.ticketMessage.create({
         data: {
@@ -444,20 +445,18 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
       revalidatePath("/tickets");
       revalidatePath(`/tickets/${meeting.ticketId}`);
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag(`ticket-${meeting.ticketId}`);
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag("tickets");
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag(`meetings`);
+      revalidateTag(`ticket-${meeting.ticketId}`, "max");
+      revalidateTag("tickets", "max");
+      revalidateTag(`meetings`, "max");
       broadcastTicketMutation(meeting.ticketId!, "MEETING_CANCELLED");
 
-      sendTicketReplyEmail({
-        ticket: meeting.ticket,
-        messageContent: rendered.plainText,
-        htmlOverride: rendered.html,
-        senderName: session.user.name || "TicketFlow Agent",
-      }).then(async ({ messageId, threadId }) => {
+      try {
+        const { messageId, threadId } = await sendTicketReplyEmail({
+          ticket: meeting.ticket,
+          messageContent: rendered.plainText,
+          htmlOverride: rendered.html,
+          senderName: session.user.name || "TicketFlow Agent",
+        });
         if (messageId || threadId) {
           await prisma.ticketMessage.update({
             where: { id: message.id },
@@ -467,13 +466,15 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
             },
           });
         }
-        if (threadId && meeting.ticket) {
+        if (threadId) {
           await prisma.ticket.update({
             where: { id: meeting.ticket.id },
             data: { threadId },
           });
         }
-      }).catch(err => console.error("[DELETE /api/meetings/[id]] Email dispatch failed:", err));
+      } catch (err) {
+        console.error("[DELETE /api/meetings/[id]] Email dispatch failed:", err);
+      }
     }
 
     return NextResponse.json(

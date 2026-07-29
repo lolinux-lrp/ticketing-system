@@ -86,30 +86,44 @@ export async function GET(req: NextRequest) {
           const startStr = meeting.startTime.toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" });
           const endStr = meeting.endTime.toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" });
 
-          const message = await prisma.ticketMessage.create({
-            data: {
-              ticketId: meeting.ticketId,
-              senderType: "SYSTEM",
-              senderEmail: "system@meetings",
-              content: `⏰ **Meeting Reminder:** ${meeting.title} starts in 15 minutes.\n**Time:** ${startStr} – ${endStr} (UTC)\n**Link:** ${meeting.meetingUrl}`,
-            }
-          });
+          const content = `⏰ **Meeting Reminder:** ${meeting.title} starts in 15 minutes.\n**Time:** ${startStr} – ${endStr} (UTC)` + (meeting.meetingUrl ? `\n**Link:** ${meeting.meetingUrl}` : "");
 
-          const { sendTicketReplyEmail } = await import("@/lib/email");
-          const { messageId, threadId } = await sendTicketReplyEmail({
-            ticket: meeting.ticket,
-            messageContent: message.content,
-            senderName: "TicketFlow System",
-          });
-
-          if (messageId || threadId) {
-            await prisma.ticketMessage.update({
-              where: { id: message.id },
-              data: { 
-                ...(messageId ? { messageId } : {}),
-                ...(threadId ? { threadId } : {}),
-              },
+          let message;
+          try {
+            message = await prisma.ticketMessage.create({
+              data: {
+                ticketId: meeting.ticketId,
+                senderType: "SYSTEM",
+                senderEmail: "system@meetings",
+                content,
+              }
             });
+
+            const { sendTicketReplyEmail } = await import("@/lib/email");
+            const { messageId, threadId } = await sendTicketReplyEmail({
+              ticket: meeting.ticket,
+              messageContent: message.content,
+              senderName: "TicketFlow System",
+            });
+
+            if (messageId) {
+              await prisma.ticketMessage.update({
+                where: { id: message.id },
+                data: { messageId },
+              });
+            }
+            
+            if (threadId) {
+              await prisma.ticket.update({
+                where: { id: meeting.ticketId },
+                data: { threadId }
+              });
+            }
+          } catch (err) {
+            if (message) {
+              await prisma.ticketMessage.delete({ where: { id: message.id } }).catch(() => {});
+            }
+            throw err;
           }
         }
       } catch (err) {

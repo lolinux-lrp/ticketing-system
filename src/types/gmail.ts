@@ -28,7 +28,7 @@ export interface PubSubPushPayload {
 
 export interface PubSubDecodedData {
   emailAddress: string;
-  historyId: number;
+  historyId: string | number;
 }
 
 export interface GmailWatchResponse {

@@ -110,7 +110,7 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
 
   for (const msgId of uniqueMessageIds) {
     const existingLock = await prisma.processedMessage.findUnique({ where: { id: msgId } });
-    if (existingLock && (existingLock.status === "PROCESSING" || existingLock.status === "COMPLETED")) {
+    if (existingLock && (existingLock.status === "COMPLETED" || (existingLock.status === "PROCESSING" && Date.now() - existingLock.lockedAt.getTime() < 5 * 60 * 1000))) {
       continue;
     }
 
@@ -178,17 +178,20 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
 
       const senderLower = (senderName + " " + senderEmail).toLowerCase();
       
+      const isSystemEmail = senderLower === process.env.DEFAULT_FROM_EMAIL?.toLowerCase() ||
+        senderLower.startsWith("noreply@") ||
+        senderLower.startsWith("no-reply@") ||
+        senderLower.startsWith("donotreply@") ||
+        senderLower.startsWith("mailer-daemon@") ||
+        senderLower.startsWith("notifications@") ||
+        senderLower.startsWith("alert@") ||
+        senderLower.startsWith("support@");
+
       // Infinite Loop Protection
       if (
         autoSubmitted ||
         isNewsletter ||
-        senderLower.includes("noreply") ||
-        senderLower.includes("no-reply") ||
-        senderLower.includes("donotreply") ||
-        senderLower.includes("mailer-daemon") ||
-        senderLower.includes("notifications@") ||
-        senderLower.includes("alert@") ||
-        senderLower.includes("support@")
+        isSystemEmail
       ) {
         await gmail.users.messages.modify({
           userId: "me",
@@ -232,6 +235,8 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
       if (payload) extractBody(payload);
 
       let cleanedBody = trimIncomingEmail(rawBody);
+      // Stop extraction at `--` signatures
+      cleanedBody = cleanedBody.split(/^--\s*$/m)[0].trim();
       if (!cleanedBody) cleanedBody = "(No Content)";
 
       const searchContent = (subject + " " + cleanedBody).toLowerCase();
@@ -422,6 +427,7 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
           data: {
             lastActivityAt: new Date(),
             ccEmails: updatedCcEmails,
+            ...(googleThreadId && !matchedTicket.threadId ? { threadId: googleThreadId } : {}),
           },
         });
 
@@ -489,10 +495,8 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
 
         revalidatePath("/tickets");
         revalidatePath(`/tickets/${matchedTicket.id}`);
-        // @ts-expect-error Next.js canary type bug
-        revalidateTag("tickets");
-        // @ts-expect-error Next.js canary type bug
-        revalidateTag(`ticket-${matchedTicket.id}`);
+        revalidateTag("tickets", "max");
+        revalidateTag(`ticket-${matchedTicket.id}`, "max");
 
         broadcastTicketMutation(matchedTicket.id, "MESSAGE_ADDED");
 
@@ -517,19 +521,36 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
         continue;
       }
 
-      const ticket = await prisma.ticket.create({
-        data: {
-          title: subject,
-          description: cleanedBody,
-          priority: scoredPriority,
-          createdById: user.id,
-          projectId: matchedProject.id,
-          contactEmail: senderEmail,
-          threadId: googleThreadId || null,
-          messageId: cleanMessageId || null,
-          ccEmails: Array.from(new Set(allExtractedCcs)),
-        },
-        include: { project: true },
+      const ticket = await prisma.$transaction(async (tx) => {
+        const newTicket = await tx.ticket.create({
+          data: {
+            title: subject,
+            description: cleanedBody,
+            priority: scoredPriority,
+            createdById: user.id,
+            projectId: matchedProject.id,
+            contactEmail: senderEmail,
+            threadId: googleThreadId || null,
+            messageId: cleanMessageId || null,
+            ccEmails: Array.from(new Set(allExtractedCcs)),
+          },
+          include: { project: true },
+        });
+
+        await tx.ticketMessage.create({
+          data: {
+            ticketId: newTicket.id,
+            senderType: "CLIENT",
+            senderEmail,
+            content: cleanedBody,
+            to: toHeader || null,
+            cc: ccHeader || null,
+            bcc: bccHeader || null,
+            messageId: cleanMessageId || null,
+          }
+        });
+
+        return newTicket;
       });
 
       await sendNewTicketNotification({
@@ -543,10 +564,8 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
       }).catch((err: unknown) => console.error("Failed to send new ticket email", err));
 
       revalidatePath("/tickets");
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag("tickets");
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag(`ticket-${ticket.id}`);
+      revalidateTag("tickets", "max");
+      revalidateTag(`ticket-${ticket.id}`, "max");
       broadcastTicketCreated(ticket.id);
 
       await gmail.users.messages.modify({

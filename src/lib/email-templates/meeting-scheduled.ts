@@ -10,12 +10,12 @@ export function renderMeetingScheduled(vars: MeetingScheduledVariables): Rendere
 
   const plainText = `Hi ${vars.hostName || "Support Team"},
 
-A Google Meet session has been scheduled for your ticket "${vars.ticketTitle}".
+A Google Meet session has been scheduled for your ticket "${vars.ticketTitle}"${vars.ticketId ? ` (ID: ${vars.ticketId})` : ''}.
 
 Details:
 - Time: ${vars.startTime}
 - Duration: ${vars.duration} minutes
-- Link: ${vars.meetUrl}
+- Link: ${safeUrl !== '#' ? vars.meetUrl : "Unavailable (Please check the ticket dashboard)"}
 
 *Note: You do not need special permissions to enter the room or share your screen.*`;
 
@@ -40,7 +40,7 @@ Details:
       <h2>Meeting Scheduled</h2>
     </div>
     <div class="content">
-      <p>A live video conference room has been provisioned for the ticket <strong>"${safeTitle}"</strong>.</p>
+      <p>A live video conference room has been provisioned for the ticket <strong>"${safeTitle}"</strong>${vars.ticketId ? ` (ID: ${escapeHtml(vars.ticketId)})` : ''}.</p>
       
       <div class="details">
         <p><strong>Host:</strong> ${safeHost}</p>
@@ -48,8 +48,9 @@ Details:
         <p><strong>Duration:</strong> ${safeDuration} minutes</p>
       </div>
 
-      <a href="${safeUrl}" class="button" style="color: #ffffff;">Join Google Meet Room</a>
-      
+      ${safeUrl !== '#' 
+        ? `<a href="${safeUrl}" class="button" style="color: #ffffff;">Join Google Meet Room</a>`
+        : `<p style="color: #b91c1c; font-weight: bold; border: 1px solid #b91c1c; padding: 10px; border-radius: 4px; margin: 20px 0;">Warning: The meeting link is unavailable or invalid. Please check the ticket dashboard for updates.</p>`}
       <p style="font-size: 0.875rem; color: #6b7280;"><em>Note: You do not need special permissions to enter the room or share your screen.</em></p>
     </div>
     <div class="footer">

@@ -15,6 +15,7 @@ const globalForRealtime = globalThis as unknown as {
 };
 
 export const realtimeEmitter = globalForRealtime.realtimeEmitter ?? new RealtimeEmitter();
+realtimeEmitter.setMaxListeners(200);
 
 if (process.env.NODE_ENV !== "production") {
   globalForRealtime.realtimeEmitter = realtimeEmitter;

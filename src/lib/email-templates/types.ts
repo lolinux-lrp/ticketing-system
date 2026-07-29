@@ -32,15 +32,18 @@ export interface TicketClosedBounceVariables {
   supportUrl: string;
 }
 
-export interface MeetingScheduledVariables {
+export interface BaseMeetingVariables {
   ticketTitle: string;
   startTime: string;
+  ticketId?: string;
+}
+
+export interface MeetingScheduledVariables extends BaseMeetingVariables {
   duration: number;
   meetUrl: string;
   hostName?: string;
 }
 
-export interface MeetingCancelledVariables {
-  ticketTitle: string;
-  startTime: string;
+export interface MeetingCancelledVariables extends BaseMeetingVariables {
+  cancellerName?: string;
 }

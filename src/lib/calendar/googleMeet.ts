@@ -81,6 +81,13 @@ function resolveOAuthCredentials(): {
   return { clientId, clientSecret, refreshToken };
 }
 
+function getCalendarClient() {
+  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+  return google.calendar({ version: "v3", auth: oauth2Client });
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -103,13 +110,7 @@ function resolveOAuthCredentials(): {
 export async function createSilentGoogleMeetRoom(
   params: CreateMeetRoomParams
 ): Promise<CreateMeetRoomResult> {
-  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
-
-  // Initialize the OAuth2 client with system account credentials.
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = getCalendarClient();
 
   // Call the Calendar API to create an event with a Meet conference room.
   // CRITICAL: `attendees` is intentionally absent from requestBody.
@@ -213,12 +214,7 @@ export async function createSilentGoogleMeetRoom(
 export async function patchGoogleMeetAttendees(
   params: PatchMeetAttendeesParams
 ): Promise<void> {
-  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = getCalendarClient();
 
   const uniqueEmails = Array.from(new Set(params.attendeeEmails)).filter(Boolean);
   if (uniqueEmails.length === 0) return;
@@ -241,12 +237,7 @@ export async function patchGoogleMeetAttendees(
  * @throws If the Google Calendar API returns an error.
  */
 export async function deleteGoogleMeetRoom(externalGoogleEventId: string): Promise<void> {
-  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = getCalendarClient();
 
   await calendar.events.delete({
     calendarId: "primary",

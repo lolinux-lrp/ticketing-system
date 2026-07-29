@@ -21,6 +21,13 @@ export async function GET(req: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
+      controller.enqueue(encoder.encode(`:connected\n\n`));
+      const pingInterval = setInterval(() => {
+        if (!isClosed) {
+          controller.enqueue(encoder.encode(`:ping\n\n`));
+        }
+      }, 30000);
+
       const onEvent = async (event: RealtimeEvent) => {
         if (isClosed) return;
         
@@ -31,9 +38,16 @@ export async function GET(req: NextRequest) {
             }
           } else {
             try {
-              const ticket = await prisma.ticket.findUnique({ where: { id: event.ticketId } });
-              if (!ticket || !can(session.user!, "ticket:view", ticket)) {
-                return;
+              if (session.user!.role === "ADMIN" || session.user!.role === "AGENT") {
+                // Ticket lookup bypassed: role guarantees view access
+              } else {
+                const ticket = await prisma.ticket.findUnique({ 
+                  where: { id: event.ticketId },
+                  select: { createdById: true, assignedToId: true }
+                });
+                if (!ticket || !can(session.user!, "ticket:view", ticket)) {
+                  return;
+                }
               }
             } catch {
               return;
@@ -50,6 +64,7 @@ export async function GET(req: NextRequest) {
 
       req.signal.addEventListener("abort", () => {
         isClosed = true;
+        clearInterval(pingInterval);
         realtimeEmitter.off("event", onEvent);
         try {
           controller.close();
@@ -60,6 +75,7 @@ export async function GET(req: NextRequest) {
     },
     cancel() {
       isClosed = true;
+      // Note: clearInterval(pingInterval) not accessible here due to scope, handled in abort event.
       if (boundOnEvent) {
         realtimeEmitter.off("event", boundOnEvent);
       }
@@ -71,6 +87,7 @@ export async function GET(req: NextRequest) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }

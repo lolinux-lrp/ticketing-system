@@ -7,7 +7,7 @@ export function renderMeetingCancelled(vars: MeetingCancelledVariables): Rendere
 
   const plainText = `🚫 Google Meet Session Cancelled
 
-The scheduled video session for ${vars.startTime} has been cancelled by the host. The room has been dissolved.`;
+The scheduled video session for ${vars.startTime} regarding the ticket "${vars.ticketTitle}" ${vars.ticketId ? `(ID: ${vars.ticketId}) ` : ''}has been cancelled by ${vars.cancellerName || 'the host'}. The room has been dissolved.`;
 
   const html = `
 <!DOCTYPE html>
@@ -29,7 +29,7 @@ The scheduled video session for ${vars.startTime} has been cancelled by the host
     </div>
     <div class="content">
       <p class="alert">🚫 Google Meet Session Cancelled</p>
-      <p>The scheduled video session for <strong>${safeStartTime}</strong> regarding the ticket <strong>"${safeTitle}"</strong> has been cancelled by the host.</p>
+      <p>The scheduled video session for <strong>${safeStartTime}</strong> regarding the ticket <strong>"${safeTitle}"</strong> ${vars.ticketId ? `(ID: ${escapeHtml(vars.ticketId)}) ` : ''}has been cancelled by <strong>${vars.cancellerName ? escapeHtml(vars.cancellerName) : 'the host'}</strong>.</p>
       <p>The room has been dissolved and the link is no longer active.</p>
     </div>
     <div class="footer">

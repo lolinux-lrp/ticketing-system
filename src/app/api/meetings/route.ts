@@ -8,6 +8,7 @@ import { createMeetingSchema } from "@/lib/validations/meetings";
 import { createSilentGoogleMeetRoom, patchGoogleMeetAttendees } from "@/lib/calendar/googleMeet";
 import { sendTicketReplyEmail } from "@/lib/email";
 import { EmailTemplates } from "@/lib/email-templates";
+import { formatMeetingTime } from "@/lib/utils/datetime";
 import { MeetingWithAttendees } from "@/types/meeting";
 
 export const dynamic = "force-dynamic";
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
         if (conflictingMeeting) {
           throw new Error(JSON.stringify({
             code: 409,
-            error: `Scheduling conflict: a participant already has an accepted or pending meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
+            error: `Scheduling conflict: a participant already has a non-cancelled meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
             conflict: {
               meetingId: conflictingMeeting.id,
               startTime: conflictingMeeting.startTime.toISOString(),
@@ -276,11 +277,7 @@ export async function POST(req: NextRequest) {
     // -----------------------------------------------------------------------
 
     if (ticketForEmail && ticketId) {
-      const startStr = new Intl.DateTimeFormat('en-IN', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Asia/Kolkata',
-      }).format(startDate) + ' (IST, UTC+05:30)';
+      const startStr = formatMeetingTime(startDate);
       const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
       
       const rendered = EmailTemplates.renderMeetingScheduled({
@@ -304,21 +301,19 @@ export async function POST(req: NextRequest) {
 
       revalidatePath("/tickets");
       revalidatePath(`/tickets/${ticketId}`);
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag("tickets");
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag(`ticket-${ticketId}`);
-      // @ts-expect-error Next.js canary type bug
-      revalidateTag(`meetings`);
+      revalidateTag("tickets", "max");
+      revalidateTag(`ticket-${ticketId}`, "max");
+      revalidateTag(`meetings`, "max");
 
       broadcastTicketMutation(ticketId, "MEETING_SCHEDULED");
 
-      sendTicketReplyEmail({
-        ticket: ticketForEmail,
-        messageContent: rendered.plainText,
-        htmlOverride: rendered.html,
-        senderName: session.user.name || "TicketFlow Agent",
-      }).then(async ({ messageId, threadId }) => {
+      try {
+        const { messageId, threadId } = await sendTicketReplyEmail({
+          ticket: ticketForEmail,
+          messageContent: rendered.plainText,
+          htmlOverride: rendered.html,
+          senderName: session.user.name || "TicketFlow Agent",
+        });
         if (messageId || threadId) {
           await prisma.ticketMessage.update({
             where: { id: message.id },
@@ -334,9 +329,9 @@ export async function POST(req: NextRequest) {
             data: { threadId },
           });
         }
-      }).catch(err => {
+      } catch (err) {
         console.error("[POST /api/meetings] Email dispatch failed:", err);
-      });
+      }
     }
 
     return NextResponse.json(

@@ -4,6 +4,7 @@ export interface RsvpPayload {
   email: string;
   meetingId: string;
   role?: string;
+  exp?: number;
 }
 
 /**
@@ -14,7 +15,11 @@ export function generateRsvpToken(payload: RsvpPayload): string | undefined {
   const secret = process.env.RSVP_TOKEN_SECRET || process.env.NEXTAUTH_SECRET;
   if (!secret || !payload.email || !payload.meetingId) return undefined;
 
-  const payloadStr = JSON.stringify(payload);
+  const fullPayload: RsvpPayload = {
+    ...payload,
+    exp: payload.exp || Date.now() + 7 * 24 * 60 * 60 * 1000,
+  };
+  const payloadStr = JSON.stringify(fullPayload);
   const payloadB64 = Buffer.from(payloadStr).toString("base64url");
   const hmac = crypto.createHmac("sha256", secret).update(payloadB64).digest("base64url");
   
@@ -56,6 +61,8 @@ export function verifyRsvpToken(token: string): RsvpPayload | null {
     const payload = JSON.parse(payloadStr) as RsvpPayload;
     
     if (!payload.email || !payload.meetingId) return null;
+    if (payload.exp && Date.now() > payload.exp) return null;
+    
     return payload;
   } catch {
     return null;

@@ -29,7 +29,7 @@ interface GetTicketsResponse {
 export const ticketsApi = createApi({
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api" }),
-  tagTypes: ["Ticket", "Meeting", "Messages", "Dashboard"],
+  tagTypes: ["Ticket", "Meeting"],
   refetchOnFocus: true,
   refetchOnReconnect: true,
   endpoints: (builder) => ({
@@ -51,7 +51,7 @@ export const ticketsApi = createApi({
           cacheDataLoaded,
           cacheEntryRemoved,
           (payload) => payload.type === 'TICKET_CREATED' || payload.type === 'TICKET_DELETED' || payload.type === 'TICKET_MUTATED',
-          () => dispatch(ticketsApi.util.invalidateTags(['Ticket', 'Dashboard']))
+          () => dispatch(ticketsApi.util.invalidateTags(['Ticket']))
         );
         await handler();
       },
@@ -62,7 +62,7 @@ export const ticketsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ['Ticket', 'Meeting', 'Messages', 'Dashboard'],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     updateTicket: builder.mutation<
       Ticket,
@@ -95,14 +95,14 @@ export const ticketsApi = createApi({
           // mutation failed — invalidation will trigger a fresh refetch
         }
       },
-      invalidatesTags: ['Ticket', 'Meeting', 'Messages', 'Dashboard'],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     deleteTicket: builder.mutation<DeleteTicketResponse, string>({
       query: (id) => ({
         url: `tickets/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: ['Ticket', 'Meeting', 'Messages', 'Dashboard'],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     getTicket: builder.query<{ ticket: Ticket }, string>({
       query: (id) => `tickets/${id}`,
@@ -112,7 +112,7 @@ export const ticketsApi = createApi({
           cacheDataLoaded,
           cacheEntryRemoved,
           (payload) => (payload.type === 'TICKET_MUTATED' || payload.type === 'TICKET_DELETED') && payload.ticketId === arg,
-          () => dispatch(ticketsApi.util.invalidateTags([{ type: 'Ticket', id: arg }, 'Messages', 'Meeting']))
+          () => dispatch(ticketsApi.util.invalidateTags([{ type: 'Ticket', id: arg }, 'Meeting']))
         );
         await handler();
       },
@@ -126,7 +126,7 @@ export const ticketsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ['Ticket', 'Meeting', 'Messages', 'Dashboard'],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     getProjects: builder.query<Project[], void>({
       query: () => "projects",

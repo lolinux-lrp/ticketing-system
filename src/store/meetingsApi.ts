@@ -21,7 +21,7 @@ export type SerializedMeetingWithAttendees = Omit<
 export const meetingsApi = createApi({
   reducerPath: "meetingsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api/meetings" }),
-  tagTypes: ["Meeting", "Ticket", "Messages", "Dashboard"],
+  tagTypes: ["Meeting", "Ticket"],
   endpoints: (builder) => ({
     getMeetings: builder.query<{ data: SerializedMeetingWithAttendees[] }, void>({
       query: () => "/",
@@ -45,7 +45,7 @@ export const meetingsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Ticket", "Meeting", "Messages", "Dashboard"],
+      invalidatesTags: ["Ticket", "Meeting"],
     }),
     updateMeeting: builder.mutation<
       { data: SerializedMeetingWithAttendees },
@@ -56,14 +56,14 @@ export const meetingsApi = createApi({
         method: "PATCH",
         body,
       }),
-      invalidatesTags: ["Ticket", "Meeting", "Messages", "Dashboard"],
+      invalidatesTags: ["Ticket", "Meeting"],
     }),
     deleteMeeting: builder.mutation<{ message: string }, { id: string; ticketId?: string }>({
       query: ({ id }) => ({
         url: `/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["Ticket", "Meeting", "Messages", "Dashboard"],
+      invalidatesTags: ["Ticket", "Meeting"],
     }),
   }),
 });

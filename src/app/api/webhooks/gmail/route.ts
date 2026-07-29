@@ -2,16 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { PubSubPushPayload, PubSubDecodedData } from "@/types/gmail";
 import { processIncomingEmails } from "@/services/email-ingestion.service";
 import { after } from "next/server";
+import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
-    const tokenParam = req.nextUrl.searchParams.get("token") || req.nextUrl.searchParams.get("secret");
     
-    if (
-      (!process.env.CRON_SECRET) ||
-      (authHeader !== `Bearer ${process.env.CRON_SECRET}` && tokenParam !== process.env.CRON_SECRET)
-    ) {
+    if (!process.env.CRON_SECRET) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
+    const a = Buffer.from(authHeader, "utf8");
+    const b = Buffer.from(expectedHeader, "utf8");
+    
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 

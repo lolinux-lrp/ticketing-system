@@ -3,26 +3,16 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import crypto from "crypto";
 import { google } from "googleapis";
-import { WatchOperationResult, GmailWatchResponse } from "@/types/gmail";
+import { WatchOperationResult } from "@/types/gmail";
 import { Role } from "@prisma/client";
 
 async function isAuthorized(req: NextRequest): Promise<boolean> {
-  // Check CRON_SECRET first
-  if (process.env.NODE_ENV !== "development") {
-    const authHeader = req.headers.get("authorization") || "";
-    
-    if (process.env.CRON_SECRET) {
-      const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
-      const a = Buffer.from(authHeader, "utf8");
-      const b = Buffer.from(expectedHeader, "utf8");
-      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-        return true;
-      }
-    }
-  } else {
-    // Development fallback
-    const authHeader = req.headers.get("authorization") || "";
-    if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+  const authHeader = req.headers.get("authorization") || "";
+  if (process.env.CRON_SECRET) {
+    const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
+    const a = Buffer.from(authHeader, "utf8");
+    const b = Buffer.from(expectedHeader, "utf8");
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
       return true;
     }
   }
@@ -79,13 +69,21 @@ async function handleWatchRequest(req: NextRequest) {
       { timeout: 10000 }
     );
 
-    const data = res.data as GmailWatchResponse;
+    const { historyId, expiration } = res.data;
+
+    if (!historyId || !expiration) {
+      console.error("[Watch] Gmail API returned missing historyId or expiration.", res.data);
+      return NextResponse.json(
+        { success: false, error: "Invalid response from Gmail API" } as WatchOperationResult,
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(
       {
         success: true,
-        historyId: data.historyId,
-        expiration: data.expiration,
+        historyId: String(historyId),
+        expiration: String(expiration),
       } as WatchOperationResult,
       { status: 200 }
     );
@@ -99,5 +97,17 @@ async function handleWatchRequest(req: NextRequest) {
   }
 }
 
-export const GET = handleWatchRequest;
+export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get("authorization") || "";
+  if (process.env.CRON_SECRET) {
+    const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
+    const a = Buffer.from(authHeader, "utf8");
+    const b = Buffer.from(expectedHeader, "utf8");
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      return handleWatchRequest(req);
+    }
+  }
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
 export const POST = handleWatchRequest;

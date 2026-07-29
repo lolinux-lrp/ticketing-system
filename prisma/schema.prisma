@@ -159,15 +159,16 @@ model Meeting {
 }
 
 model MeetingAttendee {
-  id        String         @id @default(cuid())
-  meetingId String
-  userId    String?
-  email     String?
-  meeting   Meeting        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  meetingId  String
+  userId     String?
+  email      String?
+  rsvpStatus String   @default("PENDING")
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, userId])
-  @@index([meetingId, email])
+  @@unique([meetingId, email])
   @@index([meetingId])
   @@index([userId])
 }

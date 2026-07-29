@@ -71,11 +71,15 @@ function MeetingItem({ meeting, now, isTicketCreator, isTicketContact }: { meeti
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Attendees ({meeting.attendees.length})</span>
         <div className="flex flex-wrap gap-1 mt-0.5">
-          {meeting.attendees.map(a => (
-            <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded flex items-center min-w-0" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-              <span className="truncate min-w-0" title={a.user?.name || a.email || a.user?.email || undefined}>{a.user?.name || a.email || a.user?.email}</span>
-            </span>
-          ))}
+          {meeting.attendees.map(a => {
+            const hasUser = !!a.user;
+            const displayName = a.user?.name || a.user?.email || a.email;
+            return (
+              <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded flex items-center min-w-0" style={{ background: "var(--surface-2)", color: hasUser ? "var(--text-secondary)" : "var(--text-muted)", fontStyle: hasUser ? "normal" : "italic" }}>
+                <span className="truncate min-w-0" title={displayName || undefined}>{displayName}</span>
+              </span>
+            );
+          })}
         </div>
       </div>
 

@@ -1,3 +1,30 @@
+let sharedEventSource: EventSource | null = null;
+let subscriberCount = 0;
+const subscribers = new Set<(payload: Record<string, unknown>) => void>();
+
+function getEventSource() {
+  if (!sharedEventSource) {
+    sharedEventSource = new EventSource('/api/realtime');
+    sharedEventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        subscribers.forEach((cb) => cb(payload));
+      } catch {}
+    };
+  }
+  subscriberCount++;
+  return sharedEventSource;
+}
+
+function releaseEventSource() {
+  subscriberCount--;
+  if (subscriberCount <= 0 && sharedEventSource) {
+    sharedEventSource.close();
+    sharedEventSource = null;
+    subscriberCount = 0;
+  }
+}
+
 export function subscribeToRealtime(
   cacheDataLoaded: Promise<unknown>,
   cacheEntryRemoved: Promise<void>,
@@ -7,19 +34,19 @@ export function subscribeToRealtime(
   return async () => {
     try {
       await cacheDataLoaded;
-      const eventSource = new EventSource('/api/realtime');
       
-      eventSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (predicate(payload)) {
-            onMatch(payload);
-          }
-        } catch {}
+      const callback = (payload: Record<string, unknown>) => {
+        if (predicate(payload)) {
+          onMatch(payload);
+        }
       };
       
+      subscribers.add(callback);
+      getEventSource();
+      
       await cacheEntryRemoved;
-      eventSource.close();
+      subscribers.delete(callback);
+      releaseEventSource();
     } catch {}
   };
 }
