@@ -1,8 +1,10 @@
-import { RenderedEmail, SLABreachAdminVariables, SLAExecEscalationVariables, ProjectExpirationVariables, TicketClosedBounceVariables } from './types';
+import { RenderedEmail, SLABreachAdminVariables, SLAExecEscalationVariables, ProjectExpirationVariables, TicketClosedBounceVariables, MeetingScheduledVariables, MeetingCancelledVariables } from './types';
 import { renderSLAAdminWarning } from './sla-admin-warning';
 import { renderSLAExecEscalation } from './sla-exec-escalation';
 import { renderProjectExpiration } from './project-expiration';
 import { renderTicketClosedBounce } from './ticket-closed-bounce';
+import { renderMeetingScheduled } from './meeting-scheduled';
+import { renderMeetingCancelled } from './meeting-cancelled';
 
 // Sanitize CRLF injection from subject lines
 function sanitizeEmailHeader(input: string): string {
@@ -50,6 +52,14 @@ export const EmailTemplates = {
   },
   renderTicketClosedBounce: (vars: TicketClosedBounceVariables): RenderedEmail => {
     const rendered = renderTicketClosedBounce(vars);
+    return { ...rendered, subject: sanitizeEmailHeader(rendered.subject) };
+  },
+  renderMeetingScheduled: (vars: MeetingScheduledVariables): RenderedEmail => {
+    const rendered = renderMeetingScheduled(vars);
+    return { ...rendered, subject: sanitizeEmailHeader(rendered.subject) };
+  },
+  renderMeetingCancelled: (vars: MeetingCancelledVariables): RenderedEmail => {
+    const rendered = renderMeetingCancelled(vars);
     return { ...rendered, subject: sanitizeEmailHeader(rendered.subject) };
   }
 };

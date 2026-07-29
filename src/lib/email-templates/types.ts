@@ -31,3 +31,16 @@ export interface TicketClosedBounceVariables {
   senderName: string;
   supportUrl: string;
 }
+
+export interface MeetingScheduledVariables {
+  ticketTitle: string;
+  startTime: string;
+  duration: number;
+  meetUrl: string;
+  hostName?: string;
+}
+
+export interface MeetingCancelledVariables {
+  ticketTitle: string;
+  startTime: string;
+}

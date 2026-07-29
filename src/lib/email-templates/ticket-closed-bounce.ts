@@ -40,7 +40,7 @@ Support Team`;
       <p class="alert">Your recent reply could not be processed.</p>
       <p>The support ticket <strong>"${safeTitle}"</strong> (ID: ${vars.ticketId}) you replied to has already been marked as <strong>CLOSED</strong> or <strong>RESOLVED</strong>.</p>
       <p>If you are still experiencing issues or need further assistance, please open a new support request.</p>
-      <a href="${safeSupportUrl}" class="button">Open New Ticket</a>
+      <a href="${safeSupportUrl}" class="button" style="color: #ffffff;">Open New Ticket</a>
     </div>
     <div class="footer">
       <p>Thank you,<br/>Support Team</p>
@@ -51,7 +51,7 @@ Support Team`;
   `.trim();
 
   return {
-    subject: `Re: ${vars.ticketTitle} (Ticket Closed)`,
+    subject: vars.ticketTitle.toLowerCase().startsWith('re:') ? vars.ticketTitle : `Re: ${vars.ticketTitle}`,
     plainText,
     html
   };

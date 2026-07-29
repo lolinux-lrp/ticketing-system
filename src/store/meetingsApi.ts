@@ -4,6 +4,8 @@ import type {
   UpdateMeetingPayload,
   MeetingWithAttendees,
 } from "@/types/meeting";
+import type { MeetingStatus } from "@prisma/client";
+import { subscribeToRealtime } from "./realtime";
 
 export type SerializedMeetingWithAttendees = Omit<
   MeetingWithAttendees,
@@ -13,16 +15,26 @@ export type SerializedMeetingWithAttendees = Omit<
   updatedAt: string;
   startTime: string;
   endTime: string;
+  status: MeetingStatus;
 };
 
 export const meetingsApi = createApi({
   reducerPath: "meetingsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api/meetings" }),
-  tagTypes: ["Meeting", "Ticket"],
+  tagTypes: ["Meeting", "Ticket", "Messages", "Dashboard"],
   endpoints: (builder) => ({
     getMeetings: builder.query<{ data: SerializedMeetingWithAttendees[] }, void>({
       query: () => "/",
       providesTags: ["Meeting"],
+      async onCacheEntryAdded(arg, { cacheDataLoaded, cacheEntryRemoved, dispatch }) {
+        const handler = subscribeToRealtime(
+          cacheDataLoaded,
+          cacheEntryRemoved,
+          (payload) => payload.type === 'TICKET_MUTATED' && (payload.action === 'MEETING_SCHEDULED' || payload.action === 'MEETING_CANCELLED'),
+          () => dispatch(meetingsApi.util.invalidateTags(['Meeting']))
+        );
+        await handler();
+      },
     }),
     createMeeting: builder.mutation<
       { data: SerializedMeetingWithAttendees; error?: string; conflict?: { meetingId: string; startTime: string; endTime: string } },
@@ -33,10 +45,7 @@ export const meetingsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: (result, error, arg) => 
-        arg.ticketId 
-          ? ["Meeting", { type: "Ticket", id: arg.ticketId }] 
-          : ["Meeting"],
+      invalidatesTags: ["Ticket", "Meeting", "Messages", "Dashboard"],
     }),
     updateMeeting: builder.mutation<
       { data: SerializedMeetingWithAttendees },
@@ -47,17 +56,14 @@ export const meetingsApi = createApi({
         method: "PATCH",
         body,
       }),
-      invalidatesTags: (result, error, arg) =>
-        arg.body.ticketId
-          ? ["Meeting", { type: "Ticket", id: arg.body.ticketId }]
-          : ["Meeting"],
+      invalidatesTags: ["Ticket", "Meeting", "Messages", "Dashboard"],
     }),
-    deleteMeeting: builder.mutation<{ message: string }, string>({
-      query: (id) => ({
+    deleteMeeting: builder.mutation<{ message: string }, { id: string; ticketId?: string }>({
+      query: ({ id }) => ({
         url: `/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["Meeting"],
+      invalidatesTags: ["Ticket", "Meeting", "Messages", "Dashboard"],
     }),
   }),
 });

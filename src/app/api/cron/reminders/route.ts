@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendMeetingReminderEmail } from "@/lib/email";
-import type { MeetingEmailPayload } from "@/types/meeting";
+
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,9 +41,6 @@ export async function GET(req: NextRequest) {
           select: { id: true, name: true, email: true, role: true },
         },
         attendees: {
-          where: {
-            status: { in: ["ACCEPTED", "PENDING"] },
-          },
           include: {
             user: {
               select: { id: true, name: true, email: true, role: true },
@@ -52,7 +48,17 @@ export async function GET(req: NextRequest) {
           },
         },
         ticket: {
-          select: { id: true, title: true },
+          select: { 
+            id: true, 
+            title: true,
+            contactEmail: true,
+            ccEmails: true,
+            assignedTo: { select: { email: true } },
+            threadId: true,
+            messageId: true,
+            createdBy: { select: { email: true } },
+            messages: { orderBy: { createdAt: "desc" }, take: 1, select: { messageId: true } }
+          },
         },
       },
     });
@@ -76,32 +82,36 @@ export async function GET(req: NextRequest) {
 
         if (claim.count === 0) continue; // Already claimed by another invocation
 
-        const emailPayload: MeetingEmailPayload = {
-          meetingId: meeting.id,
-          sequence: Math.floor(new Date(meeting.updatedAt).getTime() / 1000),
-          title: meeting.title,
-          description: meeting.description ?? undefined,
-          startTimeUtc: meeting.startTime.toISOString(),
-          endTimeUtc: meeting.endTime.toISOString(),
-          meetingUrl: meeting.meetingUrl,
-          host: {
-            id: meeting.createdBy.id,
-            name: meeting.createdBy.name,
-            email: meeting.createdBy.email,
-          },
-          attendees: meeting.attendees
-            .filter((a) => a.userId !== meeting.createdById)
-            .map((a) => ({
-              id: a.user.id,
-              name: a.user.name,
-              email: a.user.email,
-            })),
-          ticketContext: meeting.ticket
-            ? { ticketId: meeting.ticket.id, ticketTitle: meeting.ticket.title }
-            : undefined,
-        };
+        if (meeting.ticketId && meeting.ticket) {
+          const startStr = meeting.startTime.toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" });
+          const endStr = meeting.endTime.toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" });
 
-        await sendMeetingReminderEmail(emailPayload);
+          const message = await prisma.ticketMessage.create({
+            data: {
+              ticketId: meeting.ticketId,
+              senderType: "SYSTEM",
+              senderEmail: "system@meetings",
+              content: `⏰ **Meeting Reminder:** ${meeting.title} starts in 15 minutes.\n**Time:** ${startStr} – ${endStr} (UTC)\n**Link:** ${meeting.meetingUrl}`,
+            }
+          });
+
+          const { sendTicketReplyEmail } = await import("@/lib/email");
+          const { messageId, threadId } = await sendTicketReplyEmail({
+            ticket: meeting.ticket,
+            messageContent: message.content,
+            senderName: "TicketFlow System",
+          });
+
+          if (messageId || threadId) {
+            await prisma.ticketMessage.update({
+              where: { id: message.id },
+              data: { 
+                ...(messageId ? { messageId } : {}),
+                ...(threadId ? { threadId } : {}),
+              },
+            });
+          }
+        }
       } catch (err) {
         await prisma.meeting.update({
           where: { id: meeting.id },

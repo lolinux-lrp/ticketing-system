@@ -5,6 +5,16 @@ import { after } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
+    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+    const tokenParam = req.nextUrl.searchParams.get("token") || req.nextUrl.searchParams.get("secret");
+    
+    if (
+      (!process.env.CRON_SECRET) ||
+      (authHeader !== `Bearer ${process.env.CRON_SECRET}` && tokenParam !== process.env.CRON_SECRET)
+    ) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const body = (await req.json()) as PubSubPushPayload;
 
     if (!body?.message?.data) {

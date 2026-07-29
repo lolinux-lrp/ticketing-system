@@ -9,28 +9,11 @@
 import type {
   Meeting as PrismaMeeting,
   MeetingAttendee as PrismaMeetingAttendee,
-  AttendeeStatus as PrismaAttendeeStatus,
 } from "@prisma/client";
 
 import type { Role } from "@prisma/client";
 
-// ---------------------------------------------------------------------------
-// Enum / Union types
-// ---------------------------------------------------------------------------
 
-/** Re-exported Prisma enum for use across the application. */
-export { AttendeeStatus } from "@prisma/client";
-
-/**
- * Union literal type mirroring the `AttendeeStatus` Prisma enum.
- * Prefer this in API payload types and function signatures for
- * better structural compatibility with JSON deserialization.
- */
-export type AttendeeStatusValue =
-  | "ACCEPTED"
-  | "DECLINED"
-  | "PENDING"
-  | "CANCELLED";
 
 // ---------------------------------------------------------------------------
 // User shapes
@@ -55,9 +38,8 @@ export interface MeetingAttendeeUser {
  * A single attendee record enriched with user details.
  */
 export interface MeetingAttendeeWithUser
-  extends Omit<PrismaMeetingAttendee, "status"> {
-  status: PrismaAttendeeStatus;
-  user: MeetingAttendeeUser;
+  extends PrismaMeetingAttendee {
+  user: MeetingAttendeeUser | null;
 }
 
 /**
@@ -121,8 +103,6 @@ export interface UpdateMeetingPayload {
   ticketId?: string | null;
   /** Full replacement list of attendee user IDs (excluding host). */
   attendeeIds?: string[];
-  /** Attendee-level RSVP status update */
-  attendeeStatus?: AttendeeStatusValue;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +117,8 @@ export interface EmailAttendeeEntry {
   id: string;
   name: string | null;
   email: string | null;
+  /** Cryptographically signed token for 1-click RSVP (Accept/Decline). */
+  rsvpToken?: string;
 }
 
 /**
@@ -145,6 +127,9 @@ export interface EmailAttendeeEntry {
 export interface MeetingTicketContext {
   ticketId: string;
   ticketTitle: string;
+  contactEmail?: string | null;
+  assignedToEmail?: string | null;
+  ccEmails?: string[];
 }
 
 /**
@@ -179,4 +164,10 @@ export interface MeetingEmailPayload {
   method?: "REQUEST" | "CANCEL";
   /** Optional override for the ICS status (defaults to "CONFIRMED"). */
   status?: "CONFIRMED" | "CANCELLED";
+  /** Email thread ID for seamless inbox replies. */
+  threadId?: string;
+  /** Internal message ID to reply to, creating a chain. */
+  inReplyTo?: string;
+  /** Message ID references for proper email client threading. */
+  references?: string;
 }

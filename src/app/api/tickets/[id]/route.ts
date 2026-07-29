@@ -7,6 +7,9 @@ import { sendTicketAssignmentEmail } from "@/lib/email";
 import { RouteParams } from "@/types/api";
 import { can } from "@/lib/auth/policy";
 
+import { revalidatePath, revalidateTag } from "next/cache";
+import { broadcastTicketMutation, broadcastTicketDeleted } from "@/lib/realtime/emitter";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
@@ -161,6 +164,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }).catch((err) => console.error("Failed to send assignment email:", err));
     }
 
+    revalidatePath("/tickets");
+    revalidatePath(`/tickets/${id}`);
+    // @ts-expect-error Next.js canary type bug
+    revalidateTag("tickets");
+    // @ts-expect-error Next.js canary type bug
+    revalidateTag(`ticket-${id}`);
+
+    broadcastTicketMutation(id, "STATUS_CHANGED");
+
     return NextResponse.json(updateTicket, { status: 200 });
   } catch (e) {
     console.error("Error updating Ticket: ", e);
@@ -191,8 +203,61 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     if (!existingTicket)
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 
+    const activeMeetings = await prisma.meeting.findMany({
+      where: { ticketId: id, externalGoogleEventId: { not: null } },
+      select: { externalGoogleEventId: true }
+    });
+
+    if (activeMeetings.length > 0) {
+      const { deleteGoogleMeetRoom } = await import("@/lib/calendar/googleMeet");
+      const eventIds = activeMeetings.map(m => m.externalGoogleEventId as string);
+      const results = await Promise.allSettled(
+        eventIds.map(async (eventId) => {
+          try {
+            await deleteGoogleMeetRoom(eventId);
+          } catch (err: unknown) {
+            const errorObj = err as Record<string, unknown>;
+            const status = errorObj?.status ?? errorObj?.code;
+            const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+            
+            if (status === 404 || status === 410 || message.includes("not found") || message.includes("gone")) {
+              return; // Resolve successfully, it's already gone
+            }
+            throw err;
+          }
+        })
+      );
+      
+      const hasRejections = results.some((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`[DELETE /api/tickets/[id]] Failed to delete Google Meet room (event ID: ${eventIds[index]}):`, result.reason);
+          return true;
+        }
+        return false;
+      });
+
+      if (hasRejections) {
+        return NextResponse.json(
+          { error: "Failed to dissolve active Google Meet rooms. Ticket deletion aborted to prevent orphaned rooms." },
+          { status: 500 }
+        );
+      }
+    }
+
     const deletedTicket = await prisma.ticket.delete({
       where: { id },
+    });
+
+    revalidatePath("/tickets");
+    revalidatePath(`/tickets/${id}`);
+    // @ts-expect-error Next.js canary type bug
+    revalidateTag("tickets");
+    // @ts-expect-error Next.js canary type bug
+    revalidateTag(`ticket-${id}`);
+
+    broadcastTicketDeleted(id, {
+      createdById: deletedTicket.createdById,
+      assignedToId: deletedTicket.assignedToId,
     });
 
     return NextResponse.json(

@@ -1,13 +1,5 @@
 import nodemailer from "nodemailer";
 import { google } from "googleapis";
-import type { MeetingEmailPayload } from "@/types/meeting";
-import { 
-  generateMeetingInvitationEmail,
-  generateMeetingCancelledEmail,
-  generateAttendeeDeclinedEmail,
-  generateMeetingReminderEmail
-} from "@/lib/email/templates/meeting";
-import { createMeetingIcsAttachment } from "@/lib/calendar/ics";
 
 const APP_BASE_URL = process.env.APP_BASE_URL;
 if (!APP_BASE_URL) {
@@ -17,6 +9,167 @@ if (!APP_BASE_URL) {
 const DEFAULT_FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL;
 if (!DEFAULT_FROM_EMAIL) {
   throw new Error("Missing required environment variable: DEFAULT_FROM_EMAIL");
+}
+
+function sanitizeMessageId(id?: string): string | undefined {
+  if (!id) return undefined;
+  // Strictly sanitize against CRLF/SMTP header injection
+  let sanitized = id.replace(/[\r\n]/g, '').trim();
+  if (!sanitized) return undefined;
+  if (!sanitized.startsWith('<')) sanitized = `<${sanitized}`;
+  if (!sanitized.endsWith('>')) sanitized = `${sanitized}>`;
+  return sanitized;
+}
+
+/**
+ * Strips CRLF characters and surrounding whitespace from a single email
+ * address string. Guards against SMTP header injection per OWASP guidelines.
+ */
+function sanitizeEmailAddress(address: string): string {
+  return address.replace(/[\r\n]/g, '').trim();
+}
+
+/**
+ * Lightweight Markdown-to-HTML email compiler.
+ * Safely encodes HTML to prevent XSS, converts basic markdown to inline-styled HTML.
+ */
+function parseMarkdownToHtml(markdown: string): string {
+  // 1. Escaping basic HTML to prevent XSS (OWASP requirement)
+  let html = markdown
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // 2. Bold text (**text**)
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight: 700; color: inherit;">$1</strong>');
+
+  // 3. Links ([Label](url))
+  // We sanitize the URL slightly to avoid `javascript:` links if any bypass earlier steps
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, url) => {
+    const safeUrl = url.replace(/"/g, '%22');
+    const lowerUrl = safeUrl.toLowerCase();
+    if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://') && !lowerUrl.startsWith('mailto:')) {
+      return `[${label}](${safeUrl})`;
+    }
+    return `<a href="${safeUrl}" style="color: #3b82f6; text-decoration: underline; font-weight: 500;">${label}</a>`;
+  });
+
+  // 4. Lists (* item or - item). We'll handle this by splitting lines.
+  const lines = html.split('\n');
+  let inList = false;
+  const parsedLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isListItem = /^[*-]\s+(.*)$/.exec(line);
+
+    if (isListItem) {
+      if (!inList) {
+        parsedLines.push('<ul style="margin: 12px 0; padding-left: 24px;">');
+        inList = true;
+      }
+      parsedLines.push(`<li style="margin-bottom: 4px;">${isListItem[1]}</li>`);
+    } else {
+      if (inList) {
+        parsedLines.push('</ul>');
+        inList = false;
+      }
+      parsedLines.push(line);
+    }
+  }
+  if (inList) {
+    parsedLines.push('</ul>');
+  }
+
+  // 5. Paragraphs and line breaks
+  html = parsedLines.join('\n');
+  const blocks = html.split(/\n\s*\n/);
+  
+  html = blocks.map(block => {
+    const trimmed = block.trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith('<ul')) return block; // Lists handle their own margins
+    return `<p style="margin: 12px 0; line-height: 1.5;">${block.replace(/\n/g, '<br/>')}</p>`;
+  }).join('');
+
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Centralized ticket recipient builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Shape returned by `buildTicketRecipients`.
+ * `to`  — The sole primary recipient: always the client's email address.
+ * `cc`  — Deduplicated array of secondary stakeholders (agent, ticket CC list,
+ *          any extra addresses passed by the caller). The client's address and
+ *          the system outbound address are always excluded from this list to
+ *          prevent duplicate delivery and routing loops.
+ */
+export interface TicketRecipients {
+  to: string;
+  cc: string[];
+}
+
+/**
+ * Enforces the strict industry-standard recipient hierarchy for every outbound
+ * ticket email:
+ *
+ *   To  → Client only   (`contactEmail` or `createdBy.email`)
+ *   Cc  → Deduped set of: assigned agent + ticket.ccEmails + additionalCc
+ *
+ * OWASP CRLF injection protection: every address is passed through
+ * `sanitizeEmailAddress` before being included in any header value.
+ *
+ * @param clientEmail    - Primary client address (`ticket.contactEmail ?? ticket.createdBy?.email`).
+ * @param assignedEmail  - Optional assigned agent email (`ticket.assignedTo?.email`).
+ * @param ticketCcEmails - CC list stored on the ticket (`ticket.ccEmails`).
+ * @param additionalCc   - Extra addresses from the caller (teammates, meeting staff, etc.).
+ * @returns `TicketRecipients` with a guaranteed `to` and a clean `cc` array.
+ * @throws If no client email can be resolved.
+ */
+export function buildTicketRecipients(
+  clientEmail: string,
+  assignedEmail?: string | null,
+  ticketCcEmails: string[] = [],
+  additionalCc: string[] = []
+): TicketRecipients {
+  const systemEmail = sanitizeEmailAddress(
+    (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL || '').toLowerCase()
+  );
+
+  const to = sanitizeEmailAddress(clientEmail);
+  if (!to) {
+    throw new Error('[buildTicketRecipients] Cannot resolve a client email address for the To field.');
+  }
+
+  const toLower = to.toLowerCase();
+
+  // Gather all candidate CC addresses
+  const candidates: string[] = [
+    ...(assignedEmail ? [assignedEmail] : []),
+    ...ticketCcEmails,
+    ...additionalCc,
+  ];
+
+  const cc = Array.from(
+    new Set(
+      candidates
+        .map(sanitizeEmailAddress)
+        .map((e) => e.toLowerCase())
+        .filter((e) => {
+          // Exclude: empty, the client (prevents duplicate delivery), the
+          // system outbound address (prevents routing loops).
+          if (!e) return false;
+          if (e === toLower) return false;
+          if (e === systemEmail) return false;
+          return true;
+        })
+    )
+  );
+
+  return { to, cc };
 }
 
 interface EmailConfig {
@@ -70,7 +223,8 @@ function createTransport() {
           }).then(res => {
             callback(null, {
               envelope: customMail.message.getEnvelope(),
-              messageId: (customMail.message.getHeader('message-id') as string) || res.data.id
+              messageId: (customMail.message.getHeader('message-id') as string) || res.data.id,
+              threadId: res.data.threadId
             });
           }).catch(sendErr => {
             callback(sendErr instanceof Error ? sendErr : new Error(String(sendErr)));
@@ -180,8 +334,17 @@ export async function sendTicketAssignmentEmail({
 
 }
 
+/**
+ * Options for the new-ticket confirmation + agent notification email.
+ *
+ * `clientEmail`   — Primary client address; always lands in `To`.
+ * `assignedEmail` — Optional agent/admin address; routed to `Cc`.
+ * `ticketCcEmails`— CC list stored on the ticket; all routed to `Cc`.
+ */
 interface NewTicketNotificationOptions {
-  to: string;
+  clientEmail: string;
+  assignedEmail?: string | null;
+  ticketCcEmails?: string[];
   ticketTitle: string;
   projectName: string;
   ticketId: string;
@@ -190,22 +353,28 @@ interface NewTicketNotificationOptions {
 }
 
 export async function sendNewTicketNotification({
-  to,
+  clientEmail,
+  assignedEmail,
+  ticketCcEmails = [],
   ticketTitle,
   projectName,
   ticketId,
   messageId,
   threadId,
-}: NewTicketNotificationOptions) {
+}: NewTicketNotificationOptions): Promise<{ messageId?: string; threadId?: string }> {
   const transport = createTransport();
   const ticketUrl = `${APP_BASE_URL}/tickets/${ticketId}`;
   const from = {
     name: "TicketFlow",
-    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string,
   };
 
-  await transport.sendMail({
+  // Enforce To: Client / Cc: Agent + other stakeholders
+  const { to, cc } = buildTicketRecipients(clientEmail, assignedEmail, ticketCcEmails);
+
+  const info = await transport.sendMail({
     to,
+    cc: cc.length > 0 ? cc.join(", ") : undefined,
     from,
     subject: ticketTitle.toLowerCase().startsWith('re:') ? ticketTitle : `Re: ${ticketTitle}`,
     text: `Your ticket "${ticketTitle}" has been successfully created for project ${projectName}.\n\nView it here: ${ticketUrl}\n\n— TicketFlow`,
@@ -220,214 +389,114 @@ export async function sendNewTicketNotification({
         <p style="margin-top:24px;color:#888;font-size:12px;">— TicketFlow</p>
       </div>
     `,
-    inReplyTo: messageId,
-    references: messageId,
+    inReplyTo: sanitizeMessageId(messageId),
+    references: sanitizeMessageId(messageId),
     threadId,
   } as nodemailer.SendMailOptions & { threadId?: string });
+
+  return {
+    messageId: info.messageId,
+    threadId: (info as nodemailer.SentMessageInfo & { threadId?: string }).threadId || threadId,
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Meeting invitation email
+// Ticket reply email
 // ---------------------------------------------------------------------------
 
-/**
- * Sends a meeting invitation email to all attendees (and the host) listed in
- * the payload. Each addressable participant receives an individual message so
- * the "To:" header is correct for every recipient.
- *
- * The email body is generated by `generateMeetingInvitationEmail` and an
- * `.ics` calendar attachment is generated by `createMeetingIcsAttachment`.
- *
- * The `.ics` is attached with content-type `text/calendar; method=REQUEST`
- * so that conforming email clients (Gmail, Outlook, Apple Mail) surface an
- * inline "Accept / Decline" RSVP widget.
- *
- * @throws If `DEFAULT_FROM_EMAIL` is not set or the ICS generator fails.
- */
-export async function sendMeetingInvitationEmail(
-  payload: MeetingEmailPayload
-): Promise<void> {
+export interface TicketReplyEmailOptions {
+  ticket: {
+    id: string;
+    title: string;
+    contactEmail: string | null;
+    messageId: string | null;
+    threadId: string | null;
+    ccEmails: string[];
+    assignedTo?: { email: string | null } | null;
+    createdBy?: { email: string | null } | null;
+    messages: { messageId: string | null }[];
+  };
+  messageContent: string;
+  senderName: string;
+  htmlQuoteBlock?: string;
+  additionalCc?: string[];
+  htmlOverride?: string;
+  subjectOverride?: string;
+}
+
+export async function sendTicketReplyEmail({
+  ticket,
+  messageContent,
+  senderName,
+  htmlQuoteBlock = "",
+  additionalCc = [],
+  htmlOverride,
+  subjectOverride
+}: TicketReplyEmailOptions): Promise<{ messageId?: string; threadId?: string }> {
   const transport = createTransport();
   const from = {
     name: "TicketFlow",
-    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string,
   };
 
-  // Generate template content (subject, html, text) once — shared for all recipients.
-  const { subject, html, text } = generateMeetingInvitationEmail(payload);
-
-  // Generate the .ics attachment once — shared for all recipients.
-  const icsContent = createMeetingIcsAttachment(payload);
-
-  const icsAttachment = {
-    filename: "invite.ics",
-    content: icsContent,
-    contentType: "text/calendar; method=REQUEST",
-  } as const;
-
-  // Collect all recipients: attendees with a valid email + the host.
-  type Recipient = { name: string | null; email: string };
-  const recipients: Recipient[] = [
-    ...(payload.host.email
-      ? [{ name: payload.host.name, email: payload.host.email }]
-      : []),
-    ...payload.attendees
-      .filter((a): a is typeof a & { email: string } => a.email !== null)
-      .map((a) => ({ name: a.name, email: a.email })),
-  ];
-
-  if (recipients.length === 0) {
-    console.warn(
-      "[sendMeetingInvitationEmail] No addressable recipients found — no emails sent."
-    );
-    return;
+  const clientEmail = ticket.contactEmail || ticket.createdBy?.email || "";
+  if (!clientEmail) {
+    throw new Error("Cannot send reply: ticket has no client email.");
   }
 
-  // Dispatch one email per recipient.
-  await Promise.allSettled(
-    recipients.map(async (recipient) => {
-      await transport.sendMail({
-        from,
-        to: recipient.name
-          ? { name: recipient.name, address: recipient.email }
-          : recipient.email,
-        subject,
-        text,
-        html,
-        attachments: [icsAttachment],
-      });
-    })
+  // Enforce To: Client / Cc: Agent + Stakeholders
+  const { to, cc } = buildTicketRecipients(
+    clientEmail, 
+    ticket.assignedTo?.email, 
+    ticket.ccEmails, 
+    additionalCc
   );
-}
 
-// ---------------------------------------------------------------------------
-// Meeting cancellation email
-// ---------------------------------------------------------------------------
+  const subject = subjectOverride || (ticket.title.toLowerCase().startsWith('re:') ? ticket.title : `Re: ${ticket.title}`);
 
-export async function sendMeetingCancelledEmail(
-  payload: MeetingEmailPayload
-): Promise<void> {
-  const transport = createTransport();
-  const from = {
-    name: "TicketFlow",
-    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
-  };
+  // 1. Threading: Use the last message if available, otherwise strictly fallback to the root ticket.messageId
+  const lastMessage = ticket.messages[0];
+  const rawInReplyTo = lastMessage?.messageId || ticket.messageId;
+  const inReplyTo = sanitizeMessageId(rawInReplyTo || undefined);
+
+  // 2. Threading: Build references chain starting with the root messageId
+  const previousMessageIds = [...ticket.messages]
+    .reverse()
+    .map(m => m.messageId)
+    .filter((id): id is string => !!id);
+    
+  const refsArray = [ticket.messageId, ...previousMessageIds]
+    .filter((id): id is string => !!id)
+    .map(id => sanitizeMessageId(id))
+    .filter((id): id is string => !!id);
+    
+  // Use a Set to remove duplicates while preserving the chain order
+  const uniqueRefs = Array.from(new Set(refsArray)).slice(-20);
+  const references = uniqueRefs.length > 0 ? uniqueRefs.join(" ") : undefined;
+
+  const parsedContent = parseMarkdownToHtml(messageContent);
+  const htmlAttribution = `<br/><br/>---<br/>Best regards,<br/>${senderName}<br/>Support Team`;
+  const htmlBody = htmlOverride || `${parsedContent}${htmlAttribution}${htmlQuoteBlock}`;
   
-  // Set method and status explicitly for the cancellation payload
-  const cancelPayload: MeetingEmailPayload = {
-    ...payload,
-    method: "CANCEL",
-    status: "CANCELLED",
-  };
+  const textAttribution = `\n\n---\nBest regards,\n${senderName}\nSupport Team`;
+  const textBody = htmlOverride ? messageContent : `${messageContent}${textAttribution}`;
 
-  const { subject, html, text } = generateMeetingCancelledEmail(cancelPayload);
-  const icsContent = createMeetingIcsAttachment(cancelPayload);
-
-  const icsAttachment = {
-    filename: "cancel.ics",
-    content: icsContent,
-    contentType: "text/calendar; method=CANCEL",
-  } as const;
-
-  type Recipient = { name: string | null; email: string };
-  const recipients: Recipient[] = [
-    ...(cancelPayload.host.email
-      ? [{ name: cancelPayload.host.name, email: cancelPayload.host.email }]
-      : []),
-    ...cancelPayload.attendees
-      .filter((a): a is typeof a & { email: string } => a.email !== null)
-      .map((a) => ({ name: a.name, email: a.email })),
-  ];
-
-  if (recipients.length === 0) return;
-
-  await Promise.allSettled(
-    recipients.map(async (recipient) => {
-      await transport.sendMail({
-        from,
-        to: recipient.name
-          ? { name: recipient.name, address: recipient.email }
-          : recipient.email,
-        subject,
-        text,
-        html,
-        attachments: [icsAttachment],
-      });
-    })
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Attendee declined email
-// ---------------------------------------------------------------------------
-
-export async function sendAttendeeDeclinedEmail(
-  payload: MeetingEmailPayload,
-  declinedAttendee: { name: string | null; email: string | null }
-): Promise<void> {
-  const transport = createTransport();
-  const from = {
-    name: "TicketFlow",
-    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
-  };
-
-  const { subject, html, text } = generateAttendeeDeclinedEmail(
-    payload,
-    declinedAttendee
-  );
-
-  const hostEmail = payload.host.email;
-  if (!hostEmail) return; // Cannot notify host if no email
-
-  await transport.sendMail({
+  const info = await transport.sendMail({
+    to,
+    cc: cc.length > 0 ? cc.join(", ") : undefined,
     from,
-    to: payload.host.name
-      ? { name: payload.host.name, address: hostEmail }
-      : hostEmail,
     subject,
-    text,
-    html,
-  });
-}
+    text: textBody,
+    html: htmlBody,
+    inReplyTo,
+    references,
+    threadId: ticket.threadId || undefined,
+  } as nodemailer.SendMailOptions & { threadId?: string });
 
-// ---------------------------------------------------------------------------
-// Meeting reminder email
-// ---------------------------------------------------------------------------
-
-export async function sendMeetingReminderEmail(
-  payload: MeetingEmailPayload
-): Promise<void> {
-  const transport = createTransport();
-  const from = {
-    name: "TicketFlow",
-    address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string
+  return {
+    messageId: info.messageId,
+    threadId: (info as nodemailer.SentMessageInfo & { threadId?: string }).threadId || ticket.threadId || undefined,
   };
-
-  const { subject, html, text } = generateMeetingReminderEmail(payload);
-
-  type Recipient = { name: string | null; email: string };
-  const recipients: Recipient[] = [
-    ...(payload.host.email
-      ? [{ name: payload.host.name, email: payload.host.email }]
-      : []),
-    ...payload.attendees
-      .filter((a): a is typeof a & { email: string } => a.email !== null)
-      .map((a) => ({ name: a.name, email: a.email })),
-  ];
-
-  if (recipients.length === 0) return;
-
-  await Promise.allSettled(
-    recipients.map(async (recipient) => {
-      await transport.sendMail({
-        from,
-        to: recipient.name
-          ? { name: recipient.name, address: recipient.email }
-          : recipient.email,
-        subject,
-        text,
-        html,
-      });
-    })
-  );
 }
+
+

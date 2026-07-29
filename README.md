@@ -67,6 +67,19 @@ The database is heavily optimized with multi-column composite indices to guarant
 ### 9. Type-Safe Email Template Engine
 Located in `src/lib/email-templates/`, the centralized email engine decouples complex backend logic from MIME string formatting. It relies on strict TypeScript interfaces to guarantee that variables passed to email templates are strictly typed. All user inputs are rigorously passed through an `escapeHtml` utility to mitigate Cross-Site Scripting (XSS).
 
+### 10. Real-Time Event Streaming (SSE)
+To provide instantaneous UI updates without expensive client-side polling, the `/api/realtime` endpoint leverages Server-Sent Events (SSE). 
+- **Live Ticket Mutations:** Broadcasts ticket creations, status changes, and new messages immediately to connected web clients.
+- **Strict Stream Authorization:** Enforces RBAC directly on the stream. When tickets are deleted, the event broadcast strictly relies on pre-deletion snapshot data (`createdById`, `assignedToId`) to ensure authorization evaluations remain secure and prevent data leakage even after the underlying database row is destroyed.
+
+### 11. Idempotent Google Meet Lifecycle Management
+Calendar events strictly mirror their parent tickets. To prevent deadlocks or orphaned rooms, the system implements a robust `Promise.allSettled` cleanup mechanism upon ticket deletion.
+- **Aggressive Cleanup:** Automatically sweeps and destroys all associated active and cancelled Google Meet rooms.
+- **Idempotent 404 Bypassing:** Explicitly intercepts "Not Found" or "Gone" responses from Google APIs (e.g., if a user manually deleted the room in Calendar), resolving them successfully rather than rejecting the promise and trapping the ticket.
+
+### 12. Next.js Cache Optimization
+The platform utilizes surgical, targeted cache invalidations (`revalidateTag`, `revalidatePath`) inside API endpoints to keep the static Dashboard and Ticket views perfectly synchronized with the PostgreSQL database, guaranteeing maximum read performance without sacrificing real-time consistency.
+
 ---
 
 ## 💻 Local Development & Setup Guide

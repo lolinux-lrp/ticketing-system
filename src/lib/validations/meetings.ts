@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AttendeeStatus } from "@prisma/client";
+
 
 export const createMeetingSchema = z.object({
   title: z
@@ -41,8 +41,7 @@ export const updateMeetingSchema = z.object({
     .optional(),
   ticketId: z.string().nullable().optional(),
   attendeeIds: z.array(z.string()).optional(),
-  /** Attendee-level RSVP status update */
-  attendeeStatus: z.enum(AttendeeStatus).optional(),
+
 });
 
 export type UpdateMeetingInput = z.infer<typeof updateMeetingSchema>;

@@ -68,13 +68,16 @@ async function handleWatchRequest(req: NextRequest) {
     }
 
     const gmail = getGmailClient();
-    const res = await gmail.users.watch({
-      userId: "me",
-      requestBody: {
-        labelIds: ["INBOX"],
-        topicName,
+    const res = await gmail.users.watch(
+      {
+        userId: "me",
+        requestBody: {
+          labelIds: ["INBOX"],
+          topicName,
+        },
       },
-    });
+      { timeout: 10000 }
+    );
 
     const data = res.data as GmailWatchResponse;
 

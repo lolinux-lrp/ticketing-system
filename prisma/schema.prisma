@@ -101,6 +101,7 @@ model Ticket {
   adminEscalatedAt DateTime?
   execEscalatedAt  DateTime?
   threadId         String?
+  messageId        String?
   comments         Comment[]
   messages         TicketMessage[]
   meetings     Meeting[]
@@ -147,8 +148,9 @@ model Meeting {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
   reminderSentAt        DateTime?
+  status                MeetingStatus     @default(SCHEDULED)
   createdBy             User              @relation("MeetingHost", fields: [createdById], references: [id])
-  ticket                Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  ticket                Ticket?           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   attendees             MeetingAttendee[]
 
   @@index([ticketId])
@@ -159,12 +161,13 @@ model Meeting {
 model MeetingAttendee {
   id        String         @id @default(cuid())
   meetingId String
-  userId    String
-  status    AttendeeStatus @default(ACCEPTED)
+  userId    String?
+  email     String?
   meeting   Meeting        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, userId])
+  @@index([meetingId, email])
   @@index([meetingId])
   @@index([userId])
 }
@@ -187,13 +190,6 @@ enum Priority {
   P2 // High / Significant
   P3 // Medium / General
   P4 // Low / Info
-}
-
-enum AttendeeStatus {
-  ACCEPTED
-  DECLINED
-  PENDING
-  CANCELLED
 }
 
 model ProcessedMessage {
@@ -227,3 +223,7 @@ model TicketMessage {
   @@index([ticketId, createdAt, id])
 }
 
+enum MeetingStatus {
+  SCHEDULED
+  CANCELLED
+}

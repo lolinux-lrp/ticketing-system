@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { broadcastTicketMutation } from "@/lib/realtime/emitter";
 import { prisma } from "@/lib/prisma";
 import { createMeetingSchema } from "@/lib/validations/meetings";
-import { createSilentGoogleMeetRoom } from "@/lib/calendar/googleMeet";
-import { sendMeetingInvitationEmail } from "@/lib/email";
-import type {
-  MeetingEmailPayload,
-  MeetingWithAttendees,
-} from "@/types/meeting";
+import { createSilentGoogleMeetRoom, patchGoogleMeetAttendees } from "@/lib/calendar/googleMeet";
+import { sendTicketReplyEmail } from "@/lib/email";
+import { EmailTemplates } from "@/lib/email-templates";
+import { MeetingWithAttendees } from "@/types/meeting";
 
 export const dynamic = "force-dynamic";
 
@@ -103,20 +103,33 @@ export async function POST(req: NextRequest) {
     const createdById = session.user.id;
 
     // --- Authorize ticketId ---
+    let ticketForEmail = null;
     if (ticketId) {
-      const ticket = await prisma.ticket.findUnique({
+      ticketForEmail = await prisma.ticket.findUnique({
         where: { id: ticketId },
-        select: { createdById: true, assignedToId: true }
+        select: { 
+          createdById: true, 
+          assignedToId: true,
+          id: true, 
+          title: true, 
+          threadId: true, 
+          messageId: true,
+          contactEmail: true,
+          ccEmails: true,
+          assignedTo: { select: { email: true } },
+          createdBy: { select: { email: true } },
+          messages: { orderBy: { createdAt: "desc" }, take: 1, select: { messageId: true } } 
+        }
       });
 
-      if (!ticket) {
+      if (!ticketForEmail) {
         return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
       }
 
-      if (session.user.role === "CUSTOMER" && ticket.createdById !== session.user.id) {
+      if (session.user.role === "CUSTOMER" && ticketForEmail.createdById !== session.user.id) {
         return NextResponse.json({ error: "Forbidden: Not authorized to link this ticket" }, { status: 403 });
       }
-      if (session.user.role === "AGENT" && ticket.assignedToId !== session.user.id) {
+      if (session.user.role === "AGENT" && ticketForEmail.assignedToId !== session.user.id) {
         return NextResponse.json({ error: "Forbidden: Not authorized to link this ticket" }, { status: 403 });
       }
     }
@@ -148,12 +161,11 @@ export async function POST(req: NextRequest) {
 
     const uniqueAttendeeIds = Array.from(new Set(combinedInvitees)).filter(uid => uid !== createdById);
 
-    // Build the attendee create list: host first (ACCEPTED), then invitees (PENDING)
+    // Build the attendee create list
     const attendeeCreateData = [
-      { userId: createdById, status: "ACCEPTED" as const },
+      { userId: createdById },
       ...uniqueAttendeeIds.map((uid) => ({
         userId: uid,
-        status: "PENDING" as const,
       })),
     ];
 
@@ -167,9 +179,9 @@ export async function POST(req: NextRequest) {
             attendees: {
               some: {
                 userId: { in: allParticipantIds },
-                status: { in: ["ACCEPTED", "PENDING"] },
               },
             },
+            status: { not: "CANCELLED" },
             startTime: { lt: endDate },
             endTime:   { gt: startDate },
           },
@@ -188,7 +200,7 @@ export async function POST(req: NextRequest) {
           }));
         }
 
-        return tx.meeting.create({
+        const createdMeeting = await tx.meeting.create({
           data: {
             title,
             description,
@@ -204,6 +216,10 @@ export async function POST(req: NextRequest) {
           },
           include: MEETING_INCLUDE,
         });
+
+
+
+        return createdMeeting;
       }, {
         isolationLevel: 'Serializable'
       });
@@ -226,47 +242,102 @@ export async function POST(req: NextRequest) {
     }
 
     // -----------------------------------------------------------------------
-    // Step 3: Fetch ticket context (if linked) and dispatch invitation emails
+    // Step 3: Fetch ticket context (if linked) for email routing and whitelist
     // -----------------------------------------------------------------------
+    // (ticketForEmail already fetched above during authorization)
 
-    let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
-    if (ticketId) {
-      const ticket = await prisma.ticket.findUnique({
-        where: { id: ticketId },
-        select: { id: true, title: true },
-      });
-      if (ticket) {
-        ticketContext = { ticketId: ticket.id, ticketTitle: ticket.title };
+    // -----------------------------------------------------------------------
+    // Step 4: Patch the Google Calendar event attendees list so Meet grants
+    // direct "Join now" access. We include all stakeholders from the ticket.
+    // -----------------------------------------------------------------------
+    const allParticipantEmails = new Set<string>([
+      newMeeting.createdBy.email,
+      ...newMeeting.attendees.map((a) => a.email || a.user?.email)
+    ].filter((e): e is string => Boolean(e)));
+
+    if (ticketForEmail) {
+      if (ticketForEmail.contactEmail) allParticipantEmails.add(ticketForEmail.contactEmail);
+      if (ticketForEmail.createdBy?.email) allParticipantEmails.add(ticketForEmail.createdBy.email);
+      if (ticketForEmail.assignedTo?.email) allParticipantEmails.add(ticketForEmail.assignedTo.email);
+      if (ticketForEmail.ccEmails) {
+        ticketForEmail.ccEmails.forEach((email: string) => allParticipantEmails.add(email));
       }
     }
 
-    const emailPayload: MeetingEmailPayload = {
-      meetingId: newMeeting.id,
-      sequence: Math.floor(new Date(newMeeting.updatedAt).getTime() / 1000),
-      title: newMeeting.title,
-      description: newMeeting.description ?? undefined,
-      startTimeUtc: newMeeting.startTime.toISOString(),
-      endTimeUtc:   newMeeting.endTime.toISOString(),
-      meetingUrl:   newMeeting.meetingUrl,
-      host: {
-        id:    newMeeting.createdBy.id,
-        name:  newMeeting.createdBy.name,
-        email: newMeeting.createdBy.email,
-      },
-      attendees: newMeeting.attendees
-        .filter((a) => a.userId !== createdById)
-        .map((a) => ({
-          id:    a.user.id,
-          name:  a.user.name,
-          email: a.user.email,
-        })),
-      ticketContext,
-    };
-
-    // Fire-and-forget — email dispatch must not block the HTTP response
-    sendMeetingInvitationEmail(emailPayload).catch((err) =>
-      console.error("[POST /api/meetings] Email dispatch failed:", err)
+    patchGoogleMeetAttendees({
+      externalGoogleEventId,
+      attendeeEmails: Array.from(allParticipantEmails),
+    }).catch((err) =>
+      console.error("[POST /api/meetings] Failed to patch Meet attendees (non-critical):", err)
     );
+
+    // -----------------------------------------------------------------------
+    // Step 5: Dispatch invitation email (Link Drop)
+    // -----------------------------------------------------------------------
+
+    if (ticketForEmail && ticketId) {
+      const startStr = new Intl.DateTimeFormat('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'Asia/Kolkata',
+      }).format(startDate) + ' (IST, UTC+05:30)';
+      const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+      
+      const rendered = EmailTemplates.renderMeetingScheduled({
+        ticketTitle: ticketForEmail.title,
+        startTime: startStr,
+        duration,
+        meetUrl,
+        hostName: session.user.name || "Support Team"
+      });
+
+      const content = `📅 Live Google Meet Session Scheduled\n\nStart Time: ${startStr}\nDuration: ${duration} minutes\nLink: ${meetUrl}`;
+
+      const message = await prisma.ticketMessage.create({
+        data: {
+          ticketId,
+          senderType: "AGENT",
+          senderEmail: session.user.email || "agent@ticketflow",
+          content,
+        },
+      });
+
+      revalidatePath("/tickets");
+      revalidatePath(`/tickets/${ticketId}`);
+      // @ts-expect-error Next.js canary type bug
+      revalidateTag("tickets");
+      // @ts-expect-error Next.js canary type bug
+      revalidateTag(`ticket-${ticketId}`);
+      // @ts-expect-error Next.js canary type bug
+      revalidateTag(`meetings`);
+
+      broadcastTicketMutation(ticketId, "MEETING_SCHEDULED");
+
+      sendTicketReplyEmail({
+        ticket: ticketForEmail,
+        messageContent: rendered.plainText,
+        htmlOverride: rendered.html,
+        senderName: session.user.name || "TicketFlow Agent",
+      }).then(async ({ messageId, threadId }) => {
+        if (messageId || threadId) {
+          await prisma.ticketMessage.update({
+            where: { id: message.id },
+            data: { 
+              ...(messageId ? { messageId } : {}),
+              ...(threadId ? { threadId } : {}),
+            },
+          });
+        }
+        if (!ticketForEmail.threadId && threadId) {
+          await prisma.ticket.update({
+            where: { id: ticketId },
+            data: { threadId },
+          });
+        }
+      }).catch(err => {
+        console.error("[POST /api/meetings] Email dispatch failed:", err);
+      });
+    }
 
     return NextResponse.json(
       { data: newMeeting as MeetingWithAttendees },

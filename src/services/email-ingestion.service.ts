@@ -1,8 +1,11 @@
-import { google } from "googleapis";
+import { google, gmail_v1 } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { Priority, Role, Prisma } from "@prisma/client";
 import { EmailTemplates, buildMimeMessage, escapeHtml } from "@/lib/email-templates";
+import { sendTicketReplyEmail } from "@/lib/email";
 import { sendNewTicketNotification } from "@/lib/email";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { broadcastTicketCreated, broadcastTicketMutation } from "@/lib/realtime/emitter";
 import { trimIncomingEmail } from "@/lib/email-trimmer";
 import { GmailMessagePart, EmailIngestionResult, ProcessedTicketResult } from "@/types/gmail";
 
@@ -41,26 +44,35 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
   }
 
   let messagesToProcess: { id: string }[] = [];
+  const MAX_PAGES = 5;
 
   // Delta Sync Engine
   if (startHistoryId) {
     try {
-      const historyRes = await gmail.users.history.list({
-        userId: "me",
-        startHistoryId: startHistoryId.toString(),
-        historyTypes: ["messageAdded"],
-      });
-      
-      const history = historyRes.data.history || [];
-      for (const h of history) {
-        if (h.messagesAdded) {
-          for (const ma of h.messagesAdded) {
-            if (ma.message && ma.message.id) {
-              messagesToProcess.push({ id: ma.message.id });
+      let pageToken: string | undefined = undefined;
+      let pageCount = 0;
+      do {
+        const params: gmail_v1.Params$Resource$Users$History$List = {
+          userId: "me",
+          startHistoryId: startHistoryId.toString(),
+          historyTypes: ["messageAdded"],
+          ...(pageToken ? { pageToken } : {}),
+        };
+        const historyRes = await gmail.users.history.list(params);
+        
+        const history = historyRes.data.history || [];
+        for (const h of history) {
+          if (h.messagesAdded) {
+            for (const ma of h.messagesAdded) {
+              if (ma.message && ma.message.id) {
+                messagesToProcess.push({ id: ma.message.id });
+              }
             }
           }
         }
-      }
+        pageToken = historyRes.data.nextPageToken || undefined;
+        pageCount++;
+      } while (pageToken && pageCount < MAX_PAGES);
     } catch (err: unknown) {
       console.warn("Delta sync failed (history ID likely expired/invalid), falling back to full inbox query.", err instanceof Error ? err.message : String(err));
       // Fallback
@@ -69,12 +81,24 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
   }
 
   if (messagesToProcess.length === 0) {
-    const res = await gmail.users.messages.list({
-      userId: "me",
-      q: "is:unread -category:promotions -category:social -category:forums -from:me -from:google.com -from:github.com",
-      maxResults: 50,
-    });
-    messagesToProcess = (res.data.messages || []).filter((m): m is { id: string } => !!m.id);
+    try {
+      let pageToken: string | undefined = undefined;
+      let pageCount = 0;
+      do {
+        const params: gmail_v1.Params$Resource$Users$Messages$List = {
+          userId: "me",
+          q: "is:unread -category:promotions -category:social -category:forums -from:me -from:google.com -from:github.com",
+          ...(pageToken ? { pageToken } : {}),
+        };
+        const res = await gmail.users.messages.list(params);
+        const msgs = (res.data.messages || []).filter((m: { id?: string | null }): m is { id: string } => !!m.id);
+        messagesToProcess.push(...msgs);
+        pageToken = res.data.nextPageToken || undefined;
+        pageCount++;
+      } while (pageToken && pageCount < MAX_PAGES);
+    } catch (err: unknown) {
+      console.error("Full inbox query failed:", err instanceof Error ? err.message : String(err));
+    }
   }
 
   if (messagesToProcess.length === 0) {
@@ -85,6 +109,30 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
   const uniqueMessageIds = Array.from(new Set(messagesToProcess.map(m => m.id)));
 
   for (const msgId of uniqueMessageIds) {
+    const existingLock = await prisma.processedMessage.findUnique({ where: { id: msgId } });
+    if (existingLock && (existingLock.status === "PROCESSING" || existingLock.status === "COMPLETED")) {
+      continue;
+    }
+
+    try {
+      if (!existingLock) {
+        await prisma.processedMessage.create({
+          data: { id: msgId, status: "PROCESSING", lockedAt: new Date() },
+        });
+      } else {
+        await prisma.processedMessage.update({
+          where: { id: msgId },
+          data: { status: "PROCESSING", lockedAt: new Date() },
+        });
+      }
+    } catch (dbErr: unknown) {
+      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") {
+        continue;
+      }
+      console.error(`[Ingest] Database error locking message ${msgId}`, dbErr);
+      continue;
+    }
+
     try {
       const fullMsg = await gmail.users.messages.get({ userId: "me", id: msgId, format: "full" });
       const payload = fullMsg.data.payload;
@@ -240,94 +288,51 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
       if (matchedProject.contractEnd && new Date() > new Date(matchedProject.contractEnd)) {
         console.log(`[Ingest] Rejected ticket from User ID: ${user.id} - Project contract expired`);
 
-        let shouldProcess = false;
-        let alreadySent = false;
+        try {
+          const deterministicMessageId = `expiration-${msgId}@ticketflow.local`;
+          const existingMsgs = await gmail.users.messages.list({
+            userId: "me",
+            q: `rfc822msgid:${deterministicMessageId}`,
+          });
+
+          if (!existingMsgs.data.messages || existingMsgs.data.messages.length === 0) {
+            const rendered = EmailTemplates.renderProjectExpiration(
+              {
+                projectName: matchedProject.name,
+                emailSubject: subject,
+              },
+              matchedProject.expirationSubject || undefined,
+              matchedProject.expirationBody || undefined
+            );
+
+            const fromAddress = process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com";
+            const encodedMessage = buildMimeMessage(senderEmail, `"TicketFlow" <${fromAddress}>`, rendered, { messageId: deterministicMessageId });
+
+            await gmail.users.messages.send({
+              userId: "me",
+              requestBody: { raw: encodedMessage },
+            });
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        } catch (emailErr: unknown) {
+          console.error(`[Ingest] Failed to send expiration email to User ID: ${user.id}`, emailErr);
+        }
 
         try {
-          await prisma.processedMessage.create({
-            data: { id: msgId, status: "PROCESSING", lockedAt: new Date() },
+          await gmail.users.messages.modify({
+            userId: "me",
+            id: msgId,
+            requestBody: { removeLabelIds: ["UNREAD"] },
           });
-          shouldProcess = true;
-        } catch (dbErr: unknown) {
-          if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") {
-            const existing = await prisma.processedMessage.findUnique({ where: { id: msgId } });
-            if (existing) {
-              if (existing.status === "SENT") {
-                alreadySent = true;
-              } else if (existing.status === "PROCESSING") {
-                const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-                if (existing.lockedAt < fiveMinsAgo) {
-                  const updated = await prisma.processedMessage.updateMany({
-                    where: { id: msgId, status: "PROCESSING", lockedAt: existing.lockedAt },
-                    data: { lockedAt: new Date() },
-                  });
-                  if (updated.count > 0) {
-                    shouldProcess = true;
-                  }
-                }
-              }
-            }
-          } else {
-            throw dbErr;
-          }
+        } catch (err: unknown) {
+          console.error("Failed to remove UNREAD label", err);
         }
 
-        if (shouldProcess) {
-          try {
-            const deterministicMessageId = `expiration-${msgId}@ticketflow.local`;
-            const existingMsgs = await gmail.users.messages.list({
-              userId: "me",
-              q: `rfc822msgid:${deterministicMessageId}`,
-            });
+        await prisma.processedMessage.update({
+          where: { id: msgId },
+          data: { status: "COMPLETED" },
+        });
 
-            if (existingMsgs.data.messages && existingMsgs.data.messages.length > 0) {
-              await prisma.processedMessage.update({
-                where: { id: msgId },
-                data: { status: "SENT" },
-              });
-              alreadySent = true;
-            } else {
-              const rendered = EmailTemplates.renderProjectExpiration(
-                {
-                  projectName: matchedProject.name,
-                  emailSubject: subject,
-                },
-                matchedProject.expirationSubject || undefined,
-                matchedProject.expirationBody || undefined
-              );
-
-              const fromAddress = process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com";
-              const encodedMessage = buildMimeMessage(senderEmail, `"TicketFlow" <${fromAddress}>`, rendered, { messageId: deterministicMessageId });
-
-              await gmail.users.messages.send({
-                userId: "me",
-                requestBody: { raw: encodedMessage },
-              });
-              await new Promise((resolve) => setTimeout(resolve, 500));
-
-              await prisma.processedMessage.update({
-                where: { id: msgId },
-                data: { status: "SENT" },
-              });
-              alreadySent = true;
-            }
-          } catch (emailErr: unknown) {
-            console.error(`[Ingest] Failed to send expiration email to User ID: ${user.id}`, emailErr);
-            continue;
-          }
-        }
-
-        if (alreadySent) {
-          try {
-            await gmail.users.messages.modify({
-              userId: "me",
-              id: msgId,
-              requestBody: { removeLabelIds: ["UNREAD"] },
-            });
-          } catch (err: unknown) {
-            console.error("Failed to remove UNREAD label", err);
-          }
-        }
         continue;
       }
 
@@ -358,6 +363,11 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
       if (orConditions.length > 0) {
         matchedTicket = await prisma.ticket.findFirst({
           where: { OR: orConditions },
+          include: {
+            assignedTo: { select: { email: true } },
+            createdBy: { select: { email: true } },
+            messages: { select: { messageId: true }, orderBy: { createdAt: 'desc' } },
+          },
         });
       }
 
@@ -370,15 +380,18 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
             supportUrl: `${process.env.APP_BASE_URL || "http://localhost:3000"}/login`,
           });
 
-          const fromAddress = process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com";
-          const encodedMessage = buildMimeMessage(senderEmail, `"TicketFlow" <${fromAddress}>`, rendered, {
-            inReplyTo: messageId,
-            references: [inReplyTo, messageId].filter(Boolean).join(" "),
-          });
-
-          await gmail.users.messages.send({
-            userId: "me",
-            requestBody: { raw: encodedMessage },
+          await sendTicketReplyEmail({
+            ticket: {
+              ...matchedTicket,
+              contactEmail: senderEmail,
+              assignedTo: null,
+              ccEmails: [],
+              createdBy: null,
+            },
+            messageContent: rendered.plainText,
+            senderName: "TicketFlow Support",
+            htmlOverride: rendered.html,
+            subjectOverride: rendered.subject,
           });
 
           await gmail.users.messages.modify({
@@ -474,6 +487,15 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
           });
         }
 
+        revalidatePath("/tickets");
+        revalidatePath(`/tickets/${matchedTicket.id}`);
+        // @ts-expect-error Next.js canary type bug
+        revalidateTag("tickets");
+        // @ts-expect-error Next.js canary type bug
+        revalidateTag(`ticket-${matchedTicket.id}`);
+
+        broadcastTicketMutation(matchedTicket.id, "MESSAGE_ADDED");
+
         await gmail.users.messages.modify({
           userId: "me",
           id: msgId,
@@ -485,6 +507,11 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
           title: matchedTicket.title,
           priority: matchedTicket.priority,
           projectName: matchedProject.name,
+        });
+
+        await prisma.processedMessage.update({
+          where: { id: msgId },
+          data: { status: "COMPLETED" },
         });
 
         continue;
@@ -499,30 +526,28 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
           projectId: matchedProject.id,
           contactEmail: senderEmail,
           threadId: googleThreadId || null,
+          messageId: cleanMessageId || null,
           ccEmails: Array.from(new Set(allExtractedCcs)),
-          messages: {
-            create: {
-              senderType: "CLIENT",
-              senderEmail,
-              content: cleanedBody,
-              to: toHeader || null,
-              cc: ccHeader || null,
-              bcc: bccHeader || null,
-              messageId: cleanMessageId || null,
-            },
-          },
         },
         include: { project: true },
       });
 
       await sendNewTicketNotification({
-        to: senderEmail,
+        clientEmail: senderEmail,
+        ticketCcEmails: Array.from(new Set(allExtractedCcs)),
         ticketTitle: ticket.title,
         projectName: ticket.project?.name || "Unknown Project",
         ticketId: ticket.id,
         messageId: messageId || undefined,
         threadId: googleThreadId || undefined,
       }).catch((err: unknown) => console.error("Failed to send new ticket email", err));
+
+      revalidatePath("/tickets");
+      // @ts-expect-error Next.js canary type bug
+      revalidateTag("tickets");
+      // @ts-expect-error Next.js canary type bug
+      revalidateTag(`ticket-${ticket.id}`);
+      broadcastTicketCreated(ticket.id);
 
       await gmail.users.messages.modify({
         userId: "me",
@@ -536,8 +561,21 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
         priority: ticket.priority,
         projectName: matchedProject.name,
       });
+
+      await prisma.processedMessage.update({
+        where: { id: msgId },
+        data: { status: "COMPLETED" },
+      });
     } catch (err: unknown) {
       console.error(`[Ingest] Error processing message ${msgId}. Continuing to next message.`, err);
+      try {
+        await prisma.processedMessage.update({
+          where: { id: msgId },
+          data: { status: "FAILED" },
+        });
+      } catch (updateErr) {
+        console.error("Failed to update lock to FAILED", updateErr);
+      }
     }
   }
 
