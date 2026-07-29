@@ -297,7 +297,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
           startTime: startStr,
           duration,
           meetUrl: updatedMeeting.meetingUrl || "",
-          hostName: session.user.name || "Support Team"
+          hostName: session.user.name || "Support Team",
+          ticketId: ticketForEmail.id,
         });
 
         const message = await prisma.ticketMessage.create({
@@ -430,6 +431,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
         ticketTitle: meeting.ticket.title,
         startTime: startStr,
         cancellerName: cancelActor,
+        ticketId: meeting.ticket.id,
       });
 
       const content = `🚫 Google Meet Session Cancelled\n\nThe scheduled video session for ${startStr} has been cancelled by ${cancelActor}. The room has been dissolved.`;

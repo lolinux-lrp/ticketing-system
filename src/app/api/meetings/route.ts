@@ -285,7 +285,8 @@ export async function POST(req: NextRequest) {
         startTime: startStr,
         duration,
         meetUrl,
-        hostName: session.user.name || "Support Team"
+        hostName: session.user.name || "Support Team",
+        ticketId: ticketForEmail.id,
       });
 
       const content = `📅 Live Google Meet Session Scheduled\n\nStart Time: ${startStr}\nDuration: ${duration} minutes\nLink: ${meetUrl}`;
