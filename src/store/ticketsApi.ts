@@ -8,6 +8,7 @@ import type {
   TicketMessage,
   UpdateTicketPayload,
 } from "@/types";
+import { subscribeToRealtime } from "./realtime";
 
 export interface Project {
   id: string;
@@ -28,7 +29,7 @@ interface GetTicketsResponse {
 export const ticketsApi = createApi({
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api" }),
-  tagTypes: ["Ticket"],
+  tagTypes: ["Ticket", "Meeting"],
   refetchOnFocus: true,
   refetchOnReconnect: true,
   endpoints: (builder) => ({
@@ -45,6 +46,15 @@ export const ticketsApi = createApi({
               { type: "Ticket" as const, id: "LIST" },
             ]
           : [{ type: "Ticket" as const, id: "LIST" }],
+      async onCacheEntryAdded(arg, { cacheDataLoaded, cacheEntryRemoved, dispatch }) {
+        const handler = subscribeToRealtime(
+          cacheDataLoaded,
+          cacheEntryRemoved,
+          (payload) => payload.type === 'TICKET_CREATED' || payload.type === 'TICKET_DELETED' || payload.type === 'TICKET_MUTATED',
+          () => dispatch(ticketsApi.util.invalidateTags(['Ticket']))
+        );
+        await handler();
+      },
     }),
     createTicket: builder.mutation<Ticket, CreateTicketPayload>({
       query: (body) => ({
@@ -52,7 +62,7 @@ export const ticketsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: [{ type: "Ticket", id: "LIST" }],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     updateTicket: builder.mutation<
       Ticket,
@@ -85,24 +95,27 @@ export const ticketsApi = createApi({
           // mutation failed — invalidation will trigger a fresh refetch
         }
       },
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Ticket", id },
-        { type: "Ticket", id: "LIST" },
-      ],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     deleteTicket: builder.mutation<DeleteTicketResponse, string>({
       query: (id) => ({
         url: `tickets/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: (result, error, id) => [
-        { type: "Ticket", id },
-        { type: "Ticket", id: "LIST" },
-      ],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     getTicket: builder.query<{ ticket: Ticket }, string>({
       query: (id) => `tickets/${id}`,
       providesTags: (result, error, id) => [{ type: "Ticket", id }],
+      async onCacheEntryAdded(arg, { cacheDataLoaded, cacheEntryRemoved, dispatch }) {
+        const handler = subscribeToRealtime(
+          cacheDataLoaded,
+          cacheEntryRemoved,
+          (payload) => (payload.type === 'TICKET_MUTATED' || payload.type === 'TICKET_DELETED') && payload.ticketId === arg,
+          () => dispatch(ticketsApi.util.invalidateTags([{ type: 'Ticket', id: arg }, 'Meeting']))
+        );
+        await handler();
+      },
     }),
     createTicketMessage: builder.mutation<
       TicketMessage,
@@ -113,10 +126,7 @@ export const ticketsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Ticket", id },
-        { type: "Ticket", id: "LIST" },
-      ],
+      invalidatesTags: ['Ticket', 'Meeting'],
     }),
     getProjects: builder.query<Project[], void>({
       query: () => "projects",

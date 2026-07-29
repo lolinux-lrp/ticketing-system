@@ -2,63 +2,64 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useGetMeetingsQuery, useUpdateMeetingMutation } from "@/store/meetingsApi";
+import { useGetMeetingsQuery, useDeleteMeetingMutation } from "@/store/meetingsApi";
+import { useGetTicketQuery } from "@/store/ticketsApi";
 import { ScheduleMeetingModal } from "@/components/meetings/ScheduleMeetingModal";
 import { LocalTime } from "@/components/ui/LocalTime";
-import type { AttendeeStatusValue } from "@/types/meeting";
 import type { SerializedMeetingWithAttendees } from "@/store/meetingsApi";
 
 
-function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees; now: number }) {
+function MeetingItem({ meeting, now, isTicketCreator, isTicketContact }: { meeting: SerializedMeetingWithAttendees; now: number; isTicketCreator: boolean; isTicketContact: boolean }) {
   const { data: session } = useSession();
-  const [updateMeeting, { isLoading }] = useUpdateMeetingMutation();
+  const [deleteMeeting, { isLoading: isDeleting }] = useDeleteMeetingMutation();
 
   const startMs = new Date(meeting.startTime).getTime();
   const isWithin15Mins = now >= startMs - 15 * 60 * 1000;
   const isPastEnd = now >= new Date(meeting.endTime).getTime();
 
-  const handleRSVP = (status: AttendeeStatusValue) => {
-    updateMeeting({ id: meeting.id, body: { attendeeStatus: status } });
-  };
-
-  const myAttendeeRecord = meeting.attendees.find(
-    (a) => a.userId === session?.user?.id
-  );
   const amIHost = meeting.createdById === session?.user?.id;
+  const canCancel = amIHost || isTicketCreator || isTicketContact;
+  const isCancelled = meeting.status === "CANCELLED";
 
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }}>
+    <div className="flex flex-col gap-3 p-4 rounded-xl border border-dashed" style={{ borderColor: isCancelled ? "var(--border)" : "var(--border)", opacity: isCancelled ? 0.6 : 1 }}>
       <div className="flex justify-between items-start">
         <div>
           <h4 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{meeting.title}</h4>
-          <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
-            <LocalTime date={meeting.startTime} options={{ weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }} /> - <LocalTime date={meeting.endTime} options={{ hour: "numeric", minute: "2-digit" }} />
-          </p>
-        </div>
-        {!isPastEnd && myAttendeeRecord && !amIHost && myAttendeeRecord.status === "PENDING" && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleRSVP("ACCEPTED")}
-              disabled={isLoading}
-              className="px-2 py-1 text-[10px] font-bold rounded bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
-            >
-              ACCEPT
-            </button>
-            <button
-              onClick={() => handleRSVP("DECLINED")}
-              disabled={isLoading}
-              className="px-2 py-1 text-[10px] font-bold rounded bg-rose-500/10 text-rose-600 hover:bg-rose-500/20"
-            >
-              DECLINE
-            </button>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+            <span className="font-medium whitespace-nowrap" style={{ color: "var(--text-primary)" }}>
+              <LocalTime date={meeting.startTime} options={{ weekday: "short", month: "short", day: "numeric" }} />
+            </span>
+            <span className="hidden sm:inline">•</span>
+            <span className="whitespace-nowrap">
+              <LocalTime date={meeting.startTime} options={{ hour: "numeric", minute: "2-digit" }} /> – <LocalTime date={meeting.endTime} options={{ hour: "numeric", minute: "2-digit" }} />
+            </span>
           </div>
-        )}
-        {!isPastEnd && myAttendeeRecord && myAttendeeRecord.status !== "PENDING" && (
-          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-            myAttendeeRecord.status === "ACCEPTED" ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
-          }`}>
-            {myAttendeeRecord.status}
+        </div>
+        {isCancelled ? (
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-gray-400/10 text-gray-500">
+            CANCELLED
           </span>
+        ) : (
+          <>
+            {!isPastEnd && canCancel && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to cancel this meeting?")) {
+                      deleteMeeting({ id: meeting.id, ticketId: meeting.ticketId || undefined }).unwrap().catch((err: { data?: { error?: string } }) => {
+                        alert(err?.data?.error || "Failed to cancel meeting. Please try again.");
+                      });
+                    }
+                  }}
+                  disabled={isDeleting}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-rose-500/10 text-rose-600 hover:bg-rose-500/20"
+                >
+                  CANCEL MEETING
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -70,28 +71,21 @@ function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Attendees ({meeting.attendees.length})</span>
         <div className="flex flex-wrap gap-1 mt-0.5">
-          {meeting.attendees.map(a => (
-            <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded flex items-center min-w-0" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-              <span className="truncate min-w-0" title={a.user.name || a.user.email || undefined}>{a.user.name || a.user.email}</span>
-              <span className={`ml-1 shrink-0 ${a.status === 'ACCEPTED' ? 'text-emerald-500' : a.status === 'DECLINED' ? 'text-rose-500' : 'text-amber-500'}`}>
-                •
+          {meeting.attendees.map(a => {
+            const hasUser = !!a.user;
+            const displayName = a.user?.name || a.user?.email || a.email;
+            return (
+              <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded flex items-center min-w-0" style={{ background: "var(--surface-2)", color: hasUser ? "var(--text-secondary)" : "var(--text-muted)", fontStyle: hasUser ? "normal" : "italic" }}>
+                <span className="truncate min-w-0" title={displayName || undefined}>{displayName}</span>
               </span>
-            </span>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {!isPastEnd && (
+      {!isCancelled && !isPastEnd && (
         <div className="mt-2 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
-          {myAttendeeRecord?.status === "DECLINED" ? (
-            <div className="w-full text-center py-2 rounded-lg text-xs font-bold bg-rose-500/10 text-rose-600">
-              You Declined
-            </div>
-          ) : myAttendeeRecord?.status === "CANCELLED" ? (
-            <div className="w-full text-center py-2 rounded-lg text-xs font-bold bg-gray-500/10 text-gray-500">
-              Meeting Cancelled
-            </div>
-          ) : isWithin15Mins ? (
+          {meeting.meetingUrl && isWithin15Mins ? (
             <a
               href={meeting.meetingUrl}
               target="_blank"
@@ -112,6 +106,13 @@ function MeetingItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees
           )}
         </div>
       )}
+      {isCancelled && (
+        <div className="mt-2 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+          <div className="w-full text-center py-2 rounded-lg text-xs font-bold bg-gray-500/10 text-gray-500">
+            This meeting has been cancelled
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -130,6 +131,7 @@ export function TicketMeetingsCard({
 }) {
   const { data: session } = useSession();
   const { data, isLoading } = useGetMeetingsQuery();
+  const { data: ticketData } = useGetTicketQuery(ticketId);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [now, setNow] = useState<number | null>(null);
 
@@ -142,20 +144,28 @@ export function TicketMeetingsCard({
 
   // Filter meetings for this specific ticket
   const ticketMeetings = data?.data?.filter((m) => m.ticketId === ticketId) || [];
-  
-  // Sort: partition by whether endTime is <= now
-  const upcoming = ticketMeetings
+
+  // Active = not globally cancelled
+  const activeMeetings = ticketMeetings.filter((m) => m.status !== "CANCELLED");
+
+  // Historical audit log keeps cancelled records for context
+  const cancelledMeetings = ticketMeetings.filter((m) => m.status === "CANCELLED");
+
+  // Sort active: upcoming first, then past
+  const upcoming = activeMeetings
     .filter((m) => new Date(m.endTime).getTime() > (now ?? 0))
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  
-  const past = ticketMeetings
+  const past = activeMeetings
     .filter((m) => new Date(m.endTime).getTime() <= (now ?? 0))
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-  const sortedMeetings = [...upcoming, ...past];
+  const sortedMeetings = [...upcoming, ...past, ...cancelledMeetings];
 
   const defaultAttendees = Array.from(new Set([customerUserId, agentUserId]))
     .filter((id): id is string => Boolean(id) && id !== session?.user?.id);
+
+  const isTicketCreator = ticketData?.ticket?.createdById === session?.user?.id;
+  const isTicketContact = !!(ticketData?.ticket?.contactEmail && session?.user?.email && ticketData.ticket.contactEmail === session.user.email);
 
   return (
     <>
@@ -185,7 +195,7 @@ export function TicketMeetingsCard({
         ) : (
           <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-1">
             {sortedMeetings.map(m => (
-              <MeetingItem key={m.id} meeting={m} now={now} />
+              <MeetingItem key={m.id} meeting={m} now={now} isTicketCreator={isTicketCreator} isTicketContact={isTicketContact} />
             ))}
           </div>
         )}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useGetMeetingsQuery, useUpdateMeetingMutation, useDeleteMeetingMutation } from "@/store/meetingsApi";
+import { useGetMeetingsQuery, useDeleteMeetingMutation } from "@/store/meetingsApi";
 import type { SerializedMeetingWithAttendees } from "@/store/meetingsApi";
 import { LocalTime } from "@/components/ui/LocalTime";
 import Link from "next/link";
@@ -13,33 +13,27 @@ import Link from "next/link";
 
 function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendees; now: number }) {
   const { data: session } = useSession();
-  const [updateMeeting, { isLoading: isUpdating }] = useUpdateMeetingMutation();
   const [deleteMeeting, { isLoading: isDeleting }] = useDeleteMeetingMutation();
   const [expanded, setExpanded] = useState(false);
+
+  const amIHost = meeting.createdById === session?.user?.id;
 
   const startMs = new Date(meeting.startTime).getTime();
   const isWithin15Mins = now >= startMs - 15 * 60 * 1000;
   const isPastEnd = now >= new Date(meeting.endTime).getTime();
 
-  const handleRSVP = (status: "ACCEPTED" | "DECLINED") => {
-    updateMeeting({ id: meeting.id, body: { attendeeStatus: status } });
-  };
-
   const handleCancel = () => {
     if (confirm("Are you sure you want to cancel this meeting?")) {
-      deleteMeeting(meeting.id);
+      deleteMeeting({ id: meeting.id, ticketId: meeting.ticketId || undefined }).unwrap().catch((err: { data?: { error?: string } }) => {
+        alert(err?.data?.error || "Failed to cancel meeting. Please try again.");
+      });
     }
   };
 
-  const myAttendeeRecord = meeting.attendees.find(
-    (a) => a.userId === session?.user?.id
-  );
-  const amIHost = meeting.createdById === session?.user?.id;
-
-  const isPending = !isPastEnd && myAttendeeRecord && !amIHost && myAttendeeRecord.status === "PENDING";
+  const isCancelled = meeting.status === "CANCELLED";
 
   return (
-    <div className={`flex flex-col rounded-xl overflow-hidden transition-colors ${isPastEnd ? 'opacity-60' : ''}`} style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}>
+    <div className={`flex flex-col rounded-xl overflow-hidden transition-colors ${isPastEnd || isCancelled ? 'opacity-60' : ''}`} style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}>
       {/* Clickable Header Area */}
       <div className="w-full flex items-center justify-between p-4 transition-colors hover:bg-black/5">
         <button 
@@ -57,8 +51,8 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{meeting.title}</h3>
-              {isPending && (
-                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-600">Action Needed</span>
+              {isCancelled && (
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-gray-400/10 text-gray-500">Cancelled</span>
               )}
             </div>
             <p className="text-xs font-medium flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
@@ -122,19 +116,12 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
                 {meeting.attendees.map(a => (
                   <div key={a.id} className="flex items-center gap-2 min-w-0">
                     <div className="w-6 h-6 shrink-0 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[10px] font-bold">
-                      {(a.user.name || a.user.email || "A")[0].toUpperCase()}
+                      {((a.user?.name || a.email || "A")[0] || "A").toUpperCase()}
                     </div>
-                    <span className="text-sm truncate min-w-0" style={{ color: "var(--text-secondary)" }} title={a.user.name || a.user.email || undefined}>
-                      {a.user.name || a.user.email}
+                    <span className="text-sm truncate min-w-0" style={{ color: "var(--text-secondary)" }} title={a.user?.name || a.email || undefined}>
+                      {a.user?.name || a.email}
                     </span>
                     {a.userId === session?.user?.id && <span className="text-sm shrink-0" style={{ color: "var(--text-secondary)" }}> (You)</span>}
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap ${
-                      a.status === 'ACCEPTED' ? 'bg-emerald-500/10 text-emerald-600' :
-                      a.status === 'DECLINED' ? 'bg-rose-500/10 text-rose-600' :
-                      'bg-amber-500/10 text-amber-600'
-                    }`}>
-                      {a.status}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -143,33 +130,19 @@ function ScheduleItem({ meeting, now }: { meeting: SerializedMeetingWithAttendee
 
           <div className="flex items-center justify-between mt-2 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
             <div className="flex gap-2">
-              {isPending && (
-                <>
-                  <button onClick={() => handleRSVP("ACCEPTED")} disabled={isUpdating} className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-90 bg-emerald-500">
-                    Accept
-                  </button>
-                  <button onClick={() => handleRSVP("DECLINED")} disabled={isUpdating} className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-90 bg-rose-500">
-                    Decline
-                  </button>
-                </>
-              )}
-              {amIHost && !isPastEnd && (
+              {!isCancelled && amIHost && !isPastEnd && (
                 <button onClick={handleCancel} disabled={isDeleting} className="px-4 py-2 rounded-lg text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 border border-rose-200">
                   Cancel Meeting
                 </button>
               )}
             </div>
 
-            {!isPastEnd && (
-              myAttendeeRecord?.status === "DECLINED" ? (
-                <div className="px-6 py-2 rounded-lg text-sm font-bold bg-rose-500/10 text-rose-600">
-                  You Declined
-                </div>
-              ) : myAttendeeRecord?.status === "CANCELLED" ? (
-                <div className="px-6 py-2 rounded-lg text-sm font-bold bg-gray-500/10 text-gray-500">
-                  Meeting Cancelled
-                </div>
-              ) : isWithin15Mins ? (
+            {isCancelled ? (
+              <div className="px-6 py-2 rounded-lg text-sm font-bold bg-gray-500/10 text-gray-500">
+                Meeting Cancelled
+              </div>
+            ) : !isPastEnd && (
+              meeting.meetingUrl && isWithin15Mins ? (
                 <a href={meeting.meetingUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-2 rounded-lg text-sm font-bold text-white transition-opacity hover:opacity-90 shadow-lg shadow-indigo-500/25" style={{ background: "var(--brand)" }}>
                   Join Meeting Now
                 </a>

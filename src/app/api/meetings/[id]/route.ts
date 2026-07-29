@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { broadcastTicketMutation } from "@/lib/realtime/emitter";
 import { prisma } from "@/lib/prisma";
 import { updateMeetingSchema } from "@/lib/validations/meetings";
-import { 
-  sendMeetingInvitationEmail,
-  sendMeetingCancelledEmail,
-  sendAttendeeDeclinedEmail
-} from "@/lib/email";
+import { sendTicketReplyEmail } from "@/lib/email";
+import { EmailTemplates } from "@/lib/email-templates";
 import { deleteGoogleMeetRoom } from "@/lib/calendar/googleMeet";
 import { RouteParams } from "@/types/api";
-import type {
-  MeetingEmailPayload,
-  MeetingWithAttendees,
-} from "@/types/meeting";
+import type { MeetingWithAttendees } from "@/types/meeting";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +29,18 @@ const MEETING_INCLUDE = {
     },
   },
   ticket: {
-    select: { id: true, title: true, createdById: true },
+    select: { 
+      id: true, 
+      title: true, 
+      createdById: true,
+      createdBy: { select: { email: true } },
+      contactEmail: true,
+      ccEmails: true,
+      assignedTo: { select: { email: true } },
+      threadId: true,
+      messageId: true,
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { messageId: true } }
+    },
   },
 } as const;
 
@@ -52,37 +59,9 @@ async function fetchMeeting(id: string) {
   });
 }
 
-/**
- * Builds a `MeetingEmailPayload` from a fully-included meeting record.
- * Used by POST (create) and PATCH (reschedule) to drive email dispatch.
- */
-async function buildEmailPayload(
-  meeting: Awaited<ReturnType<typeof fetchMeeting>> & object,
-  ticketContext: MeetingEmailPayload["ticketContext"]
-): Promise<MeetingEmailPayload> {
-  return {
-    meetingId: meeting.id,
-    sequence: Math.floor(new Date(meeting.updatedAt).getTime() / 1000),
-    title:        meeting.title,
-    description:  meeting.description ?? undefined,
-    startTimeUtc: meeting.startTime.toISOString(),
-    endTimeUtc:   meeting.endTime.toISOString(),
-    meetingUrl:   meeting.meetingUrl,
-    host: {
-      id:    meeting.createdBy.id,
-      name:  meeting.createdBy.name,
-      email: meeting.createdBy.email,
-    },
-    attendees: meeting.attendees
-      .filter((a) => a.userId !== meeting.createdById)
-      .map((a) => ({
-        id:    a.user.id,
-        name:  a.user.name,
-        email: a.user.email,
-      })),
-    ticketContext,
-  };
-}
+import { formatMeetingTime } from "@/lib/utils/datetime";
+
+
 
 // ---------------------------------------------------------------------------
 // GET /api/meetings/[id] — retrieve a single meeting
@@ -148,6 +127,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (!callerAttendeeRow) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    
+    if (meeting.status === "CANCELLED") {
+      return NextResponse.json({ error: "Meeting is already cancelled" }, { status: 400 });
+    }
 
     const body: unknown = await req.json();
     const validation = updateMeetingSchema.safeParse(body);
@@ -165,7 +148,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       endTime,
       ticketId,
       attendeeIds,
-      attendeeStatus,
     } = validation.data;
 
     // Authorization: only the host can mutate meeting details
@@ -198,19 +180,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     // -----------------------------------------------------------------------
     if (isRescheduling || attendeeIds !== undefined) {
       // Incorporate attendee changes if provided, otherwise preserve existing attendees
-      const participantIds = attendeeIds !== undefined 
+      const participantIds = (attendeeIds !== undefined 
         ? [meeting.createdById, ...attendeeIds] 
-        : meeting.attendees.map((a) => a.userId);
+        : meeting.attendees.map((a) => a.userId)).filter((id): id is string => typeof id === "string");
 
       const conflictingMeeting = await prisma.meeting.findFirst({
         where: {
-          id:   { not: id }, // Exclude this meeting from self-conflict
+          id: { not: id }, // Exclude this meeting from self-conflict
           attendees: {
             some: {
               userId: { in: participantIds },
-              status: { in: ["ACCEPTED", "PENDING"] },
             },
           },
+          status: { not: "CANCELLED" },
           startTime: { lt: newEndDate },   // ExistingStart < NewEnd
           endTime:   { gt: newStartDate }, // ExistingEnd   > NewStart
         },
@@ -220,7 +202,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       if (conflictingMeeting) {
         return NextResponse.json(
           {
-            error: `Scheduling conflict: a participant already has an accepted or pending meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
+            error: `Scheduling conflict: a participant already has a non-cancelled meeting "${conflictingMeeting.title}" that overlaps with the requested time slot.`,
             conflict: {
               meetingId: conflictingMeeting.id,
               startTime: conflictingMeeting.startTime.toISOString(),
@@ -233,96 +215,23 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     // -----------------------------------------------------------------------
-    // RSVP & Cancellation Logic
-    // -----------------------------------------------------------------------
-
-    const meetingWithTicket = meeting as typeof meeting & { ticket?: { createdById: string; title: string; id: string } | null };
-    const isHostOrCreator =
-      session.user.id === meeting.createdById ||
-      (meetingWithTicket.ticket !== null && meetingWithTicket.ticket !== undefined && session.user.id === meetingWithTicket.ticket.createdById);
-
-    // 1. IF HOST/CREATOR CANCELS
-    if (isHostOrCreator && (attendeeStatus === "CANCELLED" || attendeeStatus === "DECLINED")) {
-      await prisma.meeting.update({
-        where: { id },
-        data: {
-          attendees: {
-            updateMany: {
-              where: { meetingId: id },
-              data: { status: "CANCELLED" },
-            }
-          }
-        }
-      });
-
-      let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
-      if (meetingWithTicket.ticket) {
-        ticketContext = { ticketId: meetingWithTicket.ticket.id, ticketTitle: meetingWithTicket.ticket.title };
-      }
-
-      const updatedMeetingRecord = await fetchMeeting(id);
-      if (updatedMeetingRecord) {
-        const emailPayload = await buildEmailPayload(updatedMeetingRecord, ticketContext);
-        
-        // Enqueue side-effects as outbox/retry tasks instead of awaiting them or swallowing failures
-        if (meeting.externalGoogleEventId) {
-          deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => console.error("[PATCH /api/meetings/[id]] Failed to delete Google Meet room:", err));
-        }
-        sendMeetingCancelledEmail(emailPayload).catch((err) => console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err));
-        
-        return NextResponse.json({ data: updatedMeetingRecord as MeetingWithAttendees }, { status: 200 });
-      }
-    }
-
-    // 2. IF STANDARD ATTENDEE DECLINES
-    if (!isHostOrCreator && attendeeStatus === "DECLINED") {
-      await prisma.meetingAttendee.update({
-        where: { meetingId_userId: { meetingId: id, userId: session.user.id } },
-        data: { status: "DECLINED" },
-      });
-
-      let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
-      if (meetingWithTicket.ticket) {
-        ticketContext = { ticketId: meetingWithTicket.ticket.id, ticketTitle: meetingWithTicket.ticket.title };
-      }
-
-      const updatedMeetingRecord = await fetchMeeting(id);
-      if (updatedMeetingRecord) {
-        const emailPayload = await buildEmailPayload(updatedMeetingRecord, ticketContext);
-        sendAttendeeDeclinedEmail(emailPayload, { name: session.user.name, email: session.user.email }).catch((err) => console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err));
-        return NextResponse.json({ data: updatedMeetingRecord as MeetingWithAttendees }, { status: 200 });
-      }
-    }
-
-    // -----------------------------------------------------------------------
-    // Apply updates inside a transaction (Rescheduling & Other RSVPs)
+    // Apply updates inside a transaction (Rescheduling & Attendee updates)
     // -----------------------------------------------------------------------
 
     const txResult = await prisma.$transaction(async (tx) => {
-      // 1. Update RSVP status for the caller if requested (e.g. ACCEPTED)
-      if (attendeeStatus !== undefined) {
-        await tx.meetingAttendee.update({
-          where: {
-            meetingId_userId: {
-              meetingId: id,
-              userId:    session.user.id,
-            },
-          },
-          data: { status: attendeeStatus },
-        });
-      }
-
-      // 2. Replace attendee list if provided (host row is preserved)
-      let addedIds: string[] = [];
-      let removedIds: string[] = [];
-
+      // 1. Replace attendee list if provided (host row is preserved)
       if (attendeeIds !== undefined) {
-        const existingNonHostIds = meeting.attendees
+        const currentMeeting = await tx.meeting.findUniqueOrThrow({
+          where: { id },
+          include: { attendees: true }
+        });
+        const existingNonHostIds = currentMeeting.attendees
           .filter(a => a.userId !== meeting.createdById)
-          .map(a => a.userId);
+          .map(a => a.userId)
+          .filter((id): id is string => typeof id === "string");
 
-        addedIds = attendeeIds.filter(id => !existingNonHostIds.includes(id) && id !== meeting.createdById);
-        removedIds = existingNonHostIds.filter(id => !attendeeIds.includes(id));
+        const addedIds = attendeeIds.filter(id => !existingNonHostIds.includes(id) && id !== meeting.createdById);
+        const removedIds = existingNonHostIds.filter(id => !attendeeIds.includes(id));
 
         if (removedIds.length > 0) {
           await tx.meetingAttendee.deleteMany({
@@ -337,7 +246,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
             data: addedIds.map((uid) => ({
               meetingId: id,
               userId:    uid,
-              status:    "PENDING" as const,
             })),
             skipDuplicates: true,
           });
@@ -345,54 +253,100 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
 
       // 3. Update the Meeting record itself
-      return {
-        updatedMeeting: await tx.meeting.update({
-          where: { id },
-          data: {
-            ...(title       !== undefined ? { title }       : {}),
-            ...(description !== undefined ? { description } : {}),
-            ...(isRescheduling            ? { startTime: newStartDate, endTime: newEndDate } : {}),
-            ...(ticketId    !== undefined ? { ticketId }    : {}),
-          },
-          include: MEETING_INCLUDE,
-        }),
-        addedIds,
-        removedIds
-      };
+      return await tx.meeting.update({
+        where: { id },
+        data: {
+          ...(title       !== undefined ? { title }       : {}),
+          ...(description !== undefined ? { description } : {}),
+          ...(isRescheduling            ? { startTime: newStartDate, endTime: newEndDate } : {}),
+          ...(ticketId    !== undefined ? { ticketId }    : {}),
+        },
+        include: MEETING_INCLUDE,
+      });
     });
 
-    const { updatedMeeting, addedIds, removedIds } = txResult;
+    const updatedMeeting = txResult;
 
     // -----------------------------------------------------------------------
     // Re-dispatch invitations or cancellations based on diff
     // -----------------------------------------------------------------------
-    let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
-    if (updatedMeeting.ticketId) {
-      const ticket = await prisma.ticket.findUnique({
+    if (updatedMeeting.ticketId && isRescheduling) {
+      const ticketForEmail = await prisma.ticket.findUnique({
         where: { id: updatedMeeting.ticketId },
-        select: { id: true, title: true },
+        select: { 
+          id: true, 
+          title: true, 
+          contactEmail: true, 
+          ccEmails: true, 
+          threadId: true,
+          messageId: true,
+          createdById: true,
+          createdBy: { select: { email: true } },
+          assignedTo: { select: { email: true } },
+          messages: { orderBy: { createdAt: "desc" }, take: 1, select: { messageId: true } }
+        },
       });
-      if (ticket) {
-        ticketContext = { ticketId: ticket.id, ticketTitle: ticket.title };
-      }
-    }
 
-    if (isRescheduling) {
-      const emailPayload = await buildEmailPayload(updatedMeeting, ticketContext);
-      sendMeetingInvitationEmail(emailPayload).catch((err) =>
-        console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err)
-      );
-    } else {
-      // Dispatch only to added/removed attendees
-      if (addedIds.length > 0) {
-        const addedPayload = await buildEmailPayload(updatedMeeting, ticketContext);
-        addedPayload.attendees = addedPayload.attendees.filter(a => addedIds.includes(a.id));
-        sendMeetingInvitationEmail(addedPayload).catch((err) => console.error(err));
-      }
-      if (removedIds.length > 0) {
-        const removedPayload = await buildEmailPayload(meeting, ticketContext); // Use old meeting for removed
-        removedPayload.attendees = removedPayload.attendees.filter(a => removedIds.includes(a.id));
-        sendMeetingCancelledEmail(removedPayload).catch((err) => console.error(err));
+      if (ticketForEmail) {
+        const startStr = formatMeetingTime(newStartDate);
+        const duration = Math.round((newEndDate.getTime() - newStartDate.getTime()) / 60000);
+        const content = `🔄 **Meeting Rescheduled**\n\nThe Google Meet session has been rescheduled:\n* **New Time:** ${startStr}\n* **Duration:** ${duration} minutes\n\n🔗 **[Join Google Meet Room](${updatedMeeting.meetingUrl})**`;
+
+        const rendered = EmailTemplates.renderMeetingScheduled({
+          ticketTitle: ticketForEmail.title,
+          startTime: startStr,
+          duration,
+          meetUrl: updatedMeeting.meetingUrl || "",
+          hostName: session.user.name || "Support Team",
+          ticketId: ticketForEmail.id,
+        });
+
+        const message = await prisma.ticketMessage.create({
+          data: {
+            ticketId: updatedMeeting.ticketId,
+            senderType: "AGENT",
+            senderEmail: session.user.email || "agent@ticketflow",
+            content,
+          },
+        });
+
+        revalidatePath("/tickets");
+        revalidatePath(`/tickets/${updatedMeeting.ticketId}`);
+        revalidateTag(`ticket-${updatedMeeting.ticketId}`, "max");
+        revalidateTag("tickets", "max");
+        revalidateTag(`meetings`, "max");
+
+        if (updatedMeeting.status === "CANCELLED") {
+          broadcastTicketMutation(updatedMeeting.ticketId, "MEETING_CANCELLED");
+        } else {
+          broadcastTicketMutation(updatedMeeting.ticketId, "MEETING_SCHEDULED");
+        }
+
+        try {
+          const { messageId, threadId } = await sendTicketReplyEmail({
+            ticket: ticketForEmail,
+            messageContent: rendered.plainText,
+            htmlOverride: rendered.html,
+            senderName: session.user.name || "TicketFlow Agent",
+          });
+          if (messageId || threadId) {
+            await prisma.ticketMessage.update({
+              where: { id: message.id },
+              data: { 
+                ...(messageId ? { messageId } : {}),
+                ...(threadId ? { threadId } : {}),
+              },
+            });
+          }
+          if (threadId) {
+            await prisma.ticket.update({
+              where: { id: ticketForEmail.id },
+              data: { threadId },
+            });
+          }
+        } catch (err) {
+          console.error("[PATCH /api/meetings/[id]] Email dispatch failed:", err);
+        }
       }
     }
 
@@ -427,39 +381,103 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
     }
 
-    // STRICT 403 GUARD: caller must be a participant
-    const isParticipant = meeting.attendees.some(
-      (a) => a.userId === session.user.id
-    );
-    if (!isParticipant) {
+    // STRICT 403 GUARD: caller must be a participant OR ticket creator OR ticket contact
+    const isParticipant = meeting.attendees.some((a) => a.userId === session.user.id);
+    const isHost = meeting.createdById === session.user.id;
+    const isTicketCreator = meeting.ticket?.createdById === session.user.id;
+    const isTicketContact = meeting.ticket?.contactEmail && session.user.email && meeting.ticket.contactEmail === session.user.email;
+    
+    if (!isParticipant && !isTicketCreator && !isTicketContact) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Only the meeting host may delete / cancel the meeting
-    if (meeting.createdById !== session.user.id) {
+    // Only the meeting host or the main client can cancel the entire meeting
+    if (!isHost && !isTicketCreator && !isTicketContact) {
       return NextResponse.json(
-        { error: "Forbidden: only the meeting host can cancel this meeting" },
+        { error: "Forbidden: only the meeting host or main client can cancel this meeting" },
         { status: 403 }
       );
     }
 
-    if (meeting.externalGoogleEventId) {
-      deleteGoogleMeetRoom(meeting.externalGoogleEventId).catch((err) => 
-        console.error("[DELETE /api/meetings/[id]] Failed to delete Google Meet room:", err)
+    if (meeting.status === "CANCELLED") {
+      return NextResponse.json(
+        { message: "Meeting already cancelled" },
+        { status: 200 }
       );
     }
 
-    let ticketContext: MeetingEmailPayload["ticketContext"] = undefined;
-    if (meeting.ticket) {
-      ticketContext = { ticketId: meeting.ticket.id, ticketTitle: meeting.ticket.title };
-    }
-    const emailPayload = await buildEmailPayload(meeting, ticketContext);
-    sendMeetingCancelledEmail(emailPayload).catch((err) => 
-      console.error("[DELETE /api/meetings/[id]] Email dispatch failed:", err)
-    );
+    // 1. Database Operations
+    // Soft-delete the meeting by updating status to CANCELLED
+    await prisma.meeting.update({
+      where: { id },
+      data: { status: "CANCELLED" }
+    });
+    // (Soft-delete propagates logic naturally for our use case without needing attendee cascading)
 
-    // Cascading delete on MeetingAttendee is configured in the Prisma schema
-    await prisma.meeting.delete({ where: { id } });
+    // 2. External Network Side-Effects
+    if (meeting.externalGoogleEventId) {
+      try {
+        await deleteGoogleMeetRoom(meeting.externalGoogleEventId);
+      } catch (err) {
+        console.error("[DELETE /api/meetings/[id]] Failed to delete Google Meet room:", err);
+      }
+    }
+
+    if (meeting.ticket) {
+      const startStr = formatMeetingTime(meeting.startTime);
+      
+      const cancelActor = session.user.name || session.user.email || "a participant";
+      const rendered = EmailTemplates.renderMeetingCancelled({
+        ticketTitle: meeting.ticket.title,
+        startTime: startStr,
+        cancellerName: cancelActor,
+        ticketId: meeting.ticket.id,
+      });
+
+      const content = `🚫 Google Meet Session Cancelled\n\nThe scheduled video session for ${startStr} has been cancelled by ${cancelActor}. The room has been dissolved.`;
+
+      const message = await prisma.ticketMessage.create({
+        data: {
+          ticketId: meeting.ticketId!,
+          senderType: "AGENT",
+          senderEmail: session.user.email || "agent@ticketflow",
+          content,
+        },
+      });
+
+      revalidatePath("/tickets");
+      revalidatePath(`/tickets/${meeting.ticketId}`);
+      revalidateTag(`ticket-${meeting.ticketId}`, "max");
+      revalidateTag("tickets", "max");
+      revalidateTag(`meetings`, "max");
+      broadcastTicketMutation(meeting.ticketId!, "MEETING_CANCELLED");
+
+      try {
+        const { messageId, threadId } = await sendTicketReplyEmail({
+          ticket: meeting.ticket,
+          messageContent: rendered.plainText,
+          htmlOverride: rendered.html,
+          senderName: session.user.name || "TicketFlow Agent",
+        });
+        if (messageId || threadId) {
+          await prisma.ticketMessage.update({
+            where: { id: message.id },
+            data: { 
+              ...(messageId ? { messageId } : {}),
+              ...(threadId ? { threadId } : {}),
+            },
+          });
+        }
+        if (threadId) {
+          await prisma.ticket.update({
+            where: { id: meeting.ticket.id },
+            data: { threadId },
+          });
+        }
+      } catch (err) {
+        console.error("[DELETE /api/meetings/[id]] Email dispatch failed:", err);
+      }
+    }
 
     return NextResponse.json(
       { message: "Meeting cancelled successfully" },

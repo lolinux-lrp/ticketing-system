@@ -5,8 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { RouteParams } from "@/types/api";
 import { z } from "zod";
 import { TicketMessageSenderType, Status } from "@prisma/client";
-import { google } from "googleapis";
-import { buildMimeMessage } from "@/lib/email-templates";
+import { sendTicketReplyEmail } from "@/lib/email";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { broadcastTicketMutation } from "@/lib/realtime/emitter";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       where: { id: ticketId },
       include: {
         createdBy: true,
+        assignedTo: true,
         messages: {
           orderBy: { createdAt: "desc" },
         },
@@ -67,43 +69,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const senderEmail = session.user.email || "unknown@example.com";
 
-    let finalCcList = cc ? cc.split(",").map(e => e.trim().toLowerCase()).filter(Boolean) : [];
+    const extraCcList = cc ? cc.split(",").map(e => e.trim().toLowerCase()).filter(Boolean) : [];
     
-    // Add DB ccEmails
-    if (ticket.ccEmails && Array.isArray(ticket.ccEmails)) {
-      finalCcList.push(...ticket.ccEmails.map(e => e.toLowerCase()));
-    }
+    // The ticket.ccEmails should store the requested CCs for future correspondence, not every replying agent.
+    const updatedCcEmails = Array.from(new Set([...(ticket.ccEmails || []), ...extraCcList]));
 
-    // Add acting agent email
+    const mailerCcList = [...extraCcList];
+    // Add acting agent email so they get cc'd on replies for this specific message
     if (senderType === TicketMessageSenderType.AGENT && senderEmail !== "unknown@example.com") {
-      finalCcList.push(senderEmail.toLowerCase());
+      mailerCcList.push(senderEmail.toLowerCase());
     }
-
-    // Deduplicate and filter
-    const systemEmail = (process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com").toLowerCase();
-    const creatorEmail = ticket.createdBy?.email?.toLowerCase() || ticket.contactEmail?.toLowerCase() || "";
-
-    finalCcList = Array.from(new Set(finalCcList)).filter(e => {
-      const lower = e.toLowerCase();
-      return lower !== creatorEmail && lower !== systemEmail && !lower.includes("support@");
-    });
-    
-    const finalCc = finalCcList.join(", ");
-
-    const lastMessage = ticket.messages[0];
-    const inReplyTo = lastMessage?.messageId || undefined;
-
-    let quotedHistoryBlock = "";
-    if (ticket.messages.length > 0) {
-      quotedHistoryBlock += "\n\n--- Please reply above this line ---\n\n";
-      for (const msg of ticket.messages) {
-        const dateStr = msg.createdAt.toLocaleString("en-US", {
-          weekday: "short", month: "short", day: "numeric",
-          year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short"
-        });
-        quotedHistoryBlock += `On ${dateStr}, ${msg.senderEmail} (${msg.senderType}) wrote:\n>${msg.content.replace(/\n/g, '\n> ')}\n\n`;
-      }
-    }
+    const finalMessageCc = mailerCcList.length > 0 ? Array.from(new Set(mailerCcList)).join(", ") : null;
 
     const resolvedAt =
       newStatus === "RESOLVED"
@@ -120,7 +96,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           senderType,
           senderEmail,
           to,
-          cc: finalCc || null,
+          cc: finalMessageCc,
           bcc,
         },
       }),
@@ -128,7 +104,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         where: { id: ticketId },
         data: {
           lastActivityAt: new Date(),
-          ccEmails: finalCcList,
+          ccEmails: updatedCcEmails,
           ...(newStatus ? { status: newStatus } : {}),
           ...(resolvedAt !== undefined ? { resolvedAt } : {}),
         },
@@ -137,67 +113,36 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Send email if `to` is provided
     if (to) {
-      let attributionSignature = "";
-      let htmlAttributionSignature = "";
-      if (senderType === TicketMessageSenderType.AGENT) {
-        const agentName = session.user.name || session.user.email;
-        attributionSignature = `\n\n---\nBest regards,\n${agentName}\nSupport Team`;
-        htmlAttributionSignature = `<br/><br/>---<br/>Best regards,<br/>${agentName}<br/>Support Team`;
-      }
-
-      const fullText = content + attributionSignature + quotedHistoryBlock;
-      // Basic translation of the quote block to HTML, maintaining the blockquotes
-      const htmlQuoteBlock = quotedHistoryBlock.length > 0 
-        ? `<br/><br/><hr/><div>Please reply above this line</div><hr/><br/>` + 
+      let htmlQuoteBlock = "";
+      if (ticket.messages.length > 0) {
+        htmlQuoteBlock = `<br/><br/><hr/><div>Please reply above this line</div><hr/><br/>` + 
           ticket.messages.map(msg => {
             const dateStr = msg.createdAt.toLocaleString("en-US", {
               weekday: "short", month: "short", day: "numeric",
               year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short"
             });
-            return `<div>On ${dateStr}, ${msg.senderEmail} (${msg.senderType}) wrote:<br/><blockquote style="margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex">${msg.content.replace(/\n/g, '<br/>')}</blockquote></div><br/>`;
-          }).join('')
-        : "";
+            const escapedContent = msg.content
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;")
+              .replace(/\n/g, '<br/>');
+            return `<div>On ${dateStr}, ${msg.senderEmail} (${msg.senderType}) wrote:<br/><blockquote style="margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex">${escapedContent}</blockquote></div><br/>`;
+          }).join('');
+      }
 
-      const renderedEmail = {
-        subject: ticket.title.toLowerCase().startsWith('re:') ? ticket.title : `Re: ${ticket.title}`,
-        html: `<p>${content.replace(/\n/g, "<br/>")}</p>${htmlAttributionSignature}${htmlQuoteBlock}`,
-        plainText: fullText,
-      };
-
-      const from = process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@example.com";
-
-      const rawMessage = buildMimeMessage(to, from, renderedEmail, {
-        messageId: undefined, // We don't generate messageId, Google will
-        cc: finalCc || undefined,
-        bcc,
-        inReplyTo,
-        references: inReplyTo,
-      });
-
+      let info;
       try {
-        const oauth2Client = new google.auth.OAuth2(
-          process.env.GOOGLE_CLIENT_ID,
-          process.env.GOOGLE_CLIENT_SECRET
-        );
-        const refreshToken =
-          process.env.GMAIL_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN;
-        oauth2Client.setCredentials({ refresh_token: refreshToken });
-        const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-  
-        const res = await gmail.users.messages.send({
-          userId: "me",
-          requestBody: {
-            raw: rawMessage,
-            threadId: ticket.threadId || undefined,
-          },
-        });
+        const agentName = session.user.name || session.user.email || "Support Team";
         
-        await prisma.ticketMessage.update({
-          where: { id: transaction[0].id },
-          data: { messageId: res.data.id || undefined }
+        info = await sendTicketReplyEmail({
+          ticket,
+          messageContent: content,
+          senderName: senderType === TicketMessageSenderType.AGENT ? agentName : senderEmail,
+          htmlQuoteBlock,
+          additionalCc: mailerCcList,
         });
-        
-        transaction[0].messageId = res.data.id || null;
       } catch (err) {
         // Rollback the DB transaction if email fails so it can be retried cleanly
         await prisma.$transaction([
@@ -214,7 +159,31 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         ]);
         throw err;
       }
+
+      if (info.messageId) {
+        await prisma.ticketMessage.update({
+          where: { id: transaction[0].id },
+          data: { messageId: info.messageId }
+        });
+        transaction[0].messageId = info.messageId;
+      }
+      
+      if (info.threadId && !ticket.threadId) {
+        await prisma.ticket.update({
+          where: { id: ticketId },
+          data: { threadId: info.threadId }
+        });
+      }
     }
+
+    revalidatePath("/tickets");
+    revalidatePath(`/tickets/${ticketId}`);
+    // @ts-expect-error Next.js canary type bug
+    revalidateTag("tickets");
+    // @ts-expect-error Next.js canary type bug
+    revalidateTag(`ticket-${ticketId}`);
+
+    broadcastTicketMutation(ticketId, "MESSAGE_ADDED");
 
     return NextResponse.json(transaction[0], { status: 200 });
   } catch (e) {

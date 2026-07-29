@@ -48,12 +48,26 @@ export async function POST(req: NextRequest) {
     });
 
     if (newTicket.contactEmail) {
-      sendNewTicketNotification({
-        to: newTicket.contactEmail,
-        ticketTitle: newTicket.title,
-        projectName: newTicket.project?.name || "Unknown Project",
-        ticketId: newTicket.id,
-      }).catch(err => console.error("Failed to send new ticket email:", err));
+      try {
+        const info = await sendNewTicketNotification({
+          clientEmail: newTicket.contactEmail,
+          ticketTitle: newTicket.title,
+          projectName: newTicket.project?.name || "Unknown Project",
+          ticketId: newTicket.id,
+        });
+
+        if (info.threadId || info.messageId) {
+          await prisma.ticket.update({
+            where: { id: newTicket.id },
+            data: {
+              threadId: info.threadId || null,
+              messageId: info.messageId || null,
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Failed to send new ticket email:", err);
+      }
     }
 
     return NextResponse.json({ ticket: newTicket }, { status: 201 });

@@ -6,10 +6,12 @@
  * stored in environment variables, then creates a Google Calendar event with a
  * Google Meet conference room attached.
  *
- * PRIVACY RULE: The `attendees` field is intentionally OMITTED from the Google
- * Calendar API request body. This prevents Google from sending its own invitation
- * emails, keeping all attendee communication exclusively inside our app mailer
- * (Stage 2). The `sendUpdates: "none"` parameter is an additional guard layer.
+ * PRIVACY RULE: The `attendees` field is OMITTED from the initial `events.insert`
+ * call to prevent Google from sending its own invitation emails. After our database
+ * records are persisted, `patchGoogleMeetAttendees` is called to register the
+ * participant email list so Google Meet grants them direct "Join now" entry instead
+ * of routing them to the waiting room. `sendUpdates: "none"` is passed on every
+ * call to suppress all Google-side notifications.
  */
 
 import { google } from "googleapis";
@@ -32,6 +34,14 @@ export interface CreateMeetRoomResult {
   meetUrl: string;
   /** The Google Calendar event ID used for future update/delete operations. */
   externalGoogleEventId: string;
+}
+
+/** Input for patching attendees onto an existing Google Calendar event. */
+export interface PatchMeetAttendeesParams {
+  /** The Google Calendar event ID returned by createSilentGoogleMeetRoom. */
+  externalGoogleEventId: string;
+  /** Flat list of every participant email address (host + all invitees). */
+  attendeeEmails: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +81,13 @@ function resolveOAuthCredentials(): {
   return { clientId, clientSecret, refreshToken };
 }
 
+function getCalendarClient() {
+  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+  return google.calendar({ version: "v3", auth: oauth2Client });
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -93,13 +110,7 @@ function resolveOAuthCredentials(): {
 export async function createSilentGoogleMeetRoom(
   params: CreateMeetRoomParams
 ): Promise<CreateMeetRoomResult> {
-  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
-
-  // Initialize the OAuth2 client with system account credentials.
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = getCalendarClient();
 
   // Call the Calendar API to create an event with a Meet conference room.
   // CRITICAL: `attendees` is intentionally absent from requestBody.
@@ -187,6 +198,38 @@ export async function createSilentGoogleMeetRoom(
 }
 
 /**
+ * Patches an existing Google Calendar event to register the full attendee list.
+ *
+ * This must be called AFTER the meeting is persisted in the database so that all
+ * participant emails are available. Google Meet uses this attendee list to decide
+ * who receives direct "Join now" access vs. the "Ask to join" waiting-room prompt.
+ *
+ * `sendUpdates: "none"` ensures Google does NOT dispatch its own calendar
+ * invitation emails — all attendee notifications are handled by our Nodemailer
+ * dispatchers in `src/lib/email.ts`.
+ *
+ * @param params.externalGoogleEventId - The Calendar event ID to patch.
+ * @param params.attendeeEmails - All participant emails (host + invitees).
+ */
+export async function patchGoogleMeetAttendees(
+  params: PatchMeetAttendeesParams
+): Promise<void> {
+  const calendar = getCalendarClient();
+
+  const uniqueEmails = Array.from(new Set(params.attendeeEmails)).filter(Boolean);
+  if (uniqueEmails.length === 0) return;
+
+  await calendar.events.patch({
+    calendarId: "primary",
+    eventId: params.externalGoogleEventId,
+    sendUpdates: "none", // Critical: suppress ALL Google-side notifications
+    requestBody: {
+      attendees: uniqueEmails.map((email) => ({ email })),
+    },
+  });
+}
+
+/**
  * Deletes a Google Meet room by removing the underlying Google Calendar event.
  *
  * @param externalGoogleEventId - The Google Calendar event ID to delete.
@@ -194,12 +237,7 @@ export async function createSilentGoogleMeetRoom(
  * @throws If the Google Calendar API returns an error.
  */
 export async function deleteGoogleMeetRoom(externalGoogleEventId: string): Promise<void> {
-  const { clientId, clientSecret, refreshToken } = resolveOAuthCredentials();
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = getCalendarClient();
 
   await calendar.events.delete({
     calendarId: "primary",
