@@ -1,53 +1,44 @@
 "use client";
 
-import React, { useState } from 'react';
-import { useGetInsightsQuery, GetInsightsParams } from '@/store/insightsApi';
+import React from 'react';
+import { useGetInsightsQuery } from '@/store/insightsApi';
 import { VolumeVelocityCards } from './VolumeVelocityCards';
 import { TrendChart } from './TrendChart';
 import { LeaderboardGrid } from './LeaderboardGrid';
 import { AlertCircle } from 'lucide-react';
-
-type TimeframeOption = "today" | "week" | "month" | "custom";
+import { useSearchParams } from 'next/navigation';
+import { GetInsightsQueryParams } from '@/types';
 
 export function InsightsDashboard() {
-  const [timeframe, setTimeframe] = useState<TimeframeOption>('month');
+  const searchParams = useSearchParams();
 
-  // We can add custom date pickers later for 'custom', for now we pass timeframe
-  const params: GetInsightsParams = { timeframe };
+  const timeframe = (searchParams.get("timeframe") as GetInsightsQueryParams["timeframe"]) || "month";
+  const priority = searchParams.get("priority") || undefined;
+  const projectId = searchParams.get("projectId") || undefined;
+  const startDate = searchParams.get("startDate") || undefined;
+  const endDate = searchParams.get("endDate") || undefined;
+
+  const params: GetInsightsQueryParams = { 
+    timeframe,
+    ...(priority && priority !== "all" ? { priority } : {}),
+    ...(projectId && projectId !== "all" ? { projectId } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+  };
 
   const { data: response, isLoading, error } = useGetInsightsQuery(params);
 
   const insightsData = response?.data;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-            Insights & Analytics
-          </h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Track your support metrics, team performance, and ticket volume over time.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label htmlFor="timeframe" className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-            Timeframe:
-          </label>
-          <select
-            id="timeframe"
-            value={timeframe}
-            onChange={(e) => setTimeframe(e.target.value as TimeframeOption)}
-            className="input-base px-3 py-1.5 text-sm w-32 bg-[var(--surface-1)] border border-[var(--border)] rounded-md outline-none focus:border-[var(--brand)]"
-          >
-            <option value="today">Today</option>
-            <option value="week">Last 7 Days</option>
-            <option value="month">Last 30 Days</option>
-            {/* Custom option UI omitted for simplicity, but handled by API */}
-            <option value="custom" disabled>Custom</option>
-          </select>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
+          Insights & Analytics
+        </h1>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Track your support metrics, team performance, and ticket volume over time.
+        </p>
       </div>
 
       {error ? (

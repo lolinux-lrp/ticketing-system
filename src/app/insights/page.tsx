@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { InsightsDashboard } from "@/components/insights/InsightsDashboard";
+import { redirect } from "next/navigation";
 
-export default function InsightsPage() {
-  return (
-    <Suspense fallback={null}>
-      <InsightsDashboard />
-    </Suspense>
-  );
+export default function InsightsRootPage() {
+  redirect("/insights/global");
 }

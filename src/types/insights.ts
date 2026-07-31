@@ -35,3 +35,13 @@ export interface InsightsData {
   leaderboard: LeaderboardEntry[];
   trends: TrendData[];
 }
+
+export interface GetInsightsQueryParams {
+  timeframe?: "today" | "week" | "month" | "custom";
+  startDate?: string;
+  endDate?: string;
+  projectId?: string;
+  priority?: string;
+  userId?: string;
+}
+

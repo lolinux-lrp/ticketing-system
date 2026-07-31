@@ -26,6 +26,21 @@ export async function GET(req: Request) {
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
     const projectId = searchParams.get("projectId");
+    const priority = searchParams.get("priority");
+    const userId = searchParams.get("userId");
+
+    // Strict RBAC: If fetching for a specific user, ensure it's the current user OR an ADMIN
+    if (userId) {
+      const userRole = (session.user as { role?: string }).role;
+      const sessionUserId = (session.user as { id?: string }).id;
+      
+      if (userRole !== "ADMIN" && sessionUserId !== userId) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have permission to view this user's insights." },
+          { status: 403 }
+        );
+      }
+    }
 
     let startDate: Date;
     let endDate: Date = new Date();
@@ -51,8 +66,16 @@ export async function GET(req: Request) {
       },
     };
 
-    if (projectId) {
+    if (projectId && projectId !== "all") {
       baseWhere.projectId = projectId;
+    }
+    
+    if (priority && priority !== "all") {
+      baseWhere.priority = priority as Prisma.EnumPriorityFilter | "P1" | "P2" | "P3" | "P4";
+    }
+
+    if (userId) {
+      baseWhere.assignedToId = userId;
     }
 
     // 1. Prisma count for Volume Metrics

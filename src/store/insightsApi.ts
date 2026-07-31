@@ -1,12 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { InsightsData } from "@/types";
-
-export interface GetInsightsParams {
-  timeframe?: "today" | "week" | "month" | "custom";
-  startDate?: string;
-  endDate?: string;
-  projectId?: string;
-}
+import type { InsightsData, GetInsightsQueryParams } from "@/types";
 
 export const insightsApi = createApi({
   reducerPath: "insightsApi",
@@ -14,7 +7,7 @@ export const insightsApi = createApi({
   tagTypes: ["Analytics"],
   keepUnusedDataFor: 300,
   endpoints: (builder) => ({
-    getInsights: builder.query<{ data: InsightsData }, GetInsightsParams | void>({
+    getInsights: builder.query<{ data: InsightsData }, GetInsightsQueryParams | void>({
       query: (params) => ({
         url: "insights",
         params: params ?? undefined,
