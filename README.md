@@ -100,9 +100,12 @@ Create a `.env` file in the root directory. The application relies on the follow
 | `CRON_SECRET` | Bearer token secret to authenticate background CRON requests. |
 | `EXEC_ESCALATION_EMAIL` | The designated email address for Level 2 SLA escalations. |
 | `SLA_EXCLUDED_EMAILS` | Comma-separated list of emails exempt from receiving SLA admin warnings. |
+| `RSVP_TOKEN_SECRET` | HMAC secret for RSVP tokens. |
 | `GOOGLE_CLIENT_ID` | OAuth2 Client ID for Google APIs. |
 | `GOOGLE_CLIENT_SECRET` | OAuth2 Client Secret for Google APIs. |
-| `GOOGLE_REFRESH_TOKEN` | Long-lived refresh token for offline Gmail access. |
+| `GOOGLE_REFRESH_TOKEN` | Long-lived refresh token for offline Google APIs access (Calendar). |
+| `GMAIL_REFRESH_TOKEN` | (Optional) Long-lived refresh token specifically for Gmail API if using a different account. |
+| `GOOGLE_PUBSUB_TOPIC` | Google Cloud Pub/Sub topic name for Gmail push notifications. |
 | `GOOGLE_EMAIL` | The authorized inbox email address the system should monitor. |
 | `DEFAULT_FROM_EMAIL` | Fallback system sender address. |
 | `SMTP_HOST` / `PORT` / `USER` / `PASSWORD` | Optional manual SMTP overrides if not utilizing native Google APIs. |
@@ -131,14 +134,14 @@ pnpm dev
 ```
 
 **Terminal 2 (Local Cron Poller):**
-Executes `scripts/local-cron.ts`, which autonomously pings the `/api/cron/check-sla` endpoint every 10 minutes, authenticating securely via the `Bearer CRON_SECRET` header. *(Note: The `/api/cron/reminders` endpoint is not currently polled by this local script.)*
+Executes `scripts/local-cron.ts`, which autonomously runs all scheduled background tasks for local development and self-hosted production setups. It executes the SLA escalation check (10m interval), Meeting Reminders (1m interval), and Gmail Watch Renewal (24h interval). It authenticates securely via the `Bearer CRON_SECRET` header.
 ```bash
 pnpm cron:dev
 ```
 
 ### Production Automation
-In a production environment (e.g., Vercel), the background automation is managed natively by `vercel.json` cron configurations. The Vercel infrastructure automatically triggers the `/api/cron/reminders` endpoint every minute, and the SLA check every 10 minutes, authenticating securely via the `Bearer CRON_SECRET` header.
-*Note: High-frequency schedules (like once-per-minute reminders) require a Vercel Pro/Enterprise plan. For Hobby deployments, consider using an external scheduler like GitHub Actions or Mergent.*
+In a production environment (e.g., Vercel), the background automation is managed natively by `vercel.json` cron configurations. The Vercel infrastructure automatically triggers the `/api/cron/reminders` endpoint every minute, the SLA check every 10 minutes, and the Gmail watch renewal daily, authenticating securely via the `Bearer CRON_SECRET` header.
+*Note: High-frequency schedules (like once-per-minute reminders) require a Vercel Pro/Enterprise plan. For self-hosted deployments or Hobby environments, deploy the `scripts/local-cron.ts` alongside your Next.js server.*
 
 ---
 
