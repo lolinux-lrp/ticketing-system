@@ -9,7 +9,11 @@ import { AlertCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { GetInsightsQueryParams } from '@/types';
 
-export function InsightsDashboard() {
+interface InsightsDashboardProps {
+  userId?: string;
+}
+
+export function InsightsDashboard({ userId }: InsightsDashboardProps) {
   const searchParams = useSearchParams();
 
   const timeframe = (searchParams.get("timeframe") as GetInsightsQueryParams["timeframe"]) || "month";
@@ -24,6 +28,7 @@ export function InsightsDashboard() {
     ...(projectId && projectId !== "all" ? { projectId } : {}),
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
+    ...(userId ? { userId } : {}),
   };
 
   const { data: response, isLoading, error } = useGetInsightsQuery(params);

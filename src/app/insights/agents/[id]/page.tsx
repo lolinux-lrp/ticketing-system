@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { RouteParams } from "@/types/api";
+import { Suspense } from "react";
+import { InsightsDashboard } from "@/components/insights/InsightsDashboard";
+import { FilterBar } from "@/components/insights/FilterBar";
 
 export default async function AgentInsightsPage({ params }: RouteParams) {
   const session = await getServerSession(authOptions);
@@ -29,10 +32,11 @@ export default async function AgentInsightsPage({ params }: RouteParams) {
   const { id } = await params;
 
   return (
-    <div className="p-6">
-      <div className="text-xl font-semibold text-[var(--text-primary)]">
-        Agent {id} Dashboard Under Construction
-      </div>
+    <div className="p-6 max-w-7xl mx-auto">
+      <Suspense fallback={null}>
+        <FilterBar />
+        <InsightsDashboard userId={id} />
+      </Suspense>
     </div>
   );
 }
