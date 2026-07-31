@@ -71,15 +71,6 @@ export function TrendChart({ data, isLoading }: Props) {
               <Legend />
               <Line
                 type="monotone"
-                dataKey="created"
-                name="Created"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-              <Line
-                type="monotone"
                 dataKey="resolved"
                 name="Resolved"
                 stroke="#10b981"

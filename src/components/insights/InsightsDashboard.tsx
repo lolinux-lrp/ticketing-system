@@ -65,12 +65,14 @@ export function InsightsDashboard({ userId }: InsightsDashboardProps) {
           />
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
+            <div className={userId ? "lg:col-span-3" : "lg:col-span-2"}>
               <TrendChart data={insightsData?.trends ?? []} isLoading={isLoading} />
             </div>
-            <div className="lg:col-span-1">
-              <LeaderboardGrid data={insightsData?.leaderboard ?? []} isLoading={isLoading} />
-            </div>
+            {!userId && (
+              <div className="lg:col-span-1">
+                <LeaderboardGrid data={insightsData?.leaderboard ?? []} isLoading={isLoading} />
+              </div>
+            )}
           </div>
         </>
       )}

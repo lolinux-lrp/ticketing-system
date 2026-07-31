@@ -48,6 +48,8 @@ export async function GET(req: Request) {
     if (timeframe === "custom" && startDateParam && endDateParam) {
       startDate = new Date(startDateParam);
       endDate = new Date(endDateParam);
+      // Make end date inclusive of the entire day
+      endDate.setHours(23, 59, 59, 999);
     } else {
       startDate = new Date();
       if (timeframe === "today") {
