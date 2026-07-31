@@ -9,6 +9,7 @@ import type {
   UpdateTicketPayload,
 } from "@/types";
 import { subscribeToRealtime } from "./realtime";
+import { insightsApi } from "./insightsApi";
 
 export interface Project {
   id: string;
@@ -29,7 +30,7 @@ interface GetTicketsResponse {
 export const ticketsApi = createApi({
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({ baseUrl: "/api" }),
-  tagTypes: ["Ticket", "Meeting"],
+  tagTypes: ["Ticket", "Meeting", "Analytics"],
   refetchOnFocus: true,
   refetchOnReconnect: true,
   endpoints: (builder) => ({
@@ -51,7 +52,11 @@ export const ticketsApi = createApi({
           cacheDataLoaded,
           cacheEntryRemoved,
           (payload) => payload.type === 'TICKET_CREATED' || payload.type === 'TICKET_DELETED' || payload.type === 'TICKET_MUTATED',
-          () => dispatch(ticketsApi.util.invalidateTags(['Ticket']))
+          () => {
+            dispatch(ticketsApi.util.invalidateTags(['Ticket']));
+            dispatch(ticketsApi.util.invalidateTags(['Analytics']));
+            dispatch(insightsApi.util.invalidateTags(['Analytics']));
+          }
         );
         await handler();
       },
@@ -62,7 +67,13 @@ export const ticketsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ['Ticket', 'Meeting'],
+      invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
+        } catch {}
+      }
     }),
     updateTicket: builder.mutation<
       Ticket,
@@ -76,6 +87,7 @@ export const ticketsApi = createApi({
       async onQueryStarted({ id, body }, { dispatch, queryFulfilled }) {
         try {
           const { data: updatedTicket } = await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
           dispatch(
             ticketsApi.util.updateQueryData("getTicket", id, (draft) => {
               Object.assign(draft.ticket, updatedTicket);
@@ -95,14 +107,20 @@ export const ticketsApi = createApi({
           // mutation failed — invalidation will trigger a fresh refetch
         }
       },
-      invalidatesTags: ['Ticket', 'Meeting'],
+      invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
     }),
     deleteTicket: builder.mutation<DeleteTicketResponse, string>({
       query: (id) => ({
         url: `tickets/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: ['Ticket', 'Meeting'],
+      invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
+        } catch {}
+      }
     }),
     getTicket: builder.query<{ ticket: Ticket }, string>({
       query: (id) => `tickets/${id}`,
@@ -112,7 +130,11 @@ export const ticketsApi = createApi({
           cacheDataLoaded,
           cacheEntryRemoved,
           (payload) => (payload.type === 'TICKET_MUTATED' || payload.type === 'TICKET_DELETED') && payload.ticketId === arg,
-          () => dispatch(ticketsApi.util.invalidateTags([{ type: 'Ticket', id: arg }, 'Meeting']))
+          () => {
+            dispatch(ticketsApi.util.invalidateTags([{ type: 'Ticket', id: arg }, 'Meeting']));
+            dispatch(ticketsApi.util.invalidateTags(['Analytics']));
+            dispatch(insightsApi.util.invalidateTags(['Analytics']));
+          }
         );
         await handler();
       },
@@ -126,7 +148,13 @@ export const ticketsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ['Ticket', 'Meeting'],
+      invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
+        } catch {}
+      }
     }),
     getProjects: builder.query<Project[], void>({
       query: () => "projects",

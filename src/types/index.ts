@@ -79,4 +79,4 @@ export interface DeleteTicketResponse {
   data: Ticket;
 }
 
-
+export * from "./insights";

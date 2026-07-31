@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import crypto from "crypto";
-import { google } from "googleapis";
-import { WatchOperationResult } from "@/types/gmail";
+import { registerGmailWatch } from "@/lib/gmail-watch";
+import type { WatchOperationResult } from "@/types/gmail";
 import { Role } from "@prisma/client";
 
 async function isAuthorized(req: NextRequest): Promise<boolean> {
@@ -26,75 +26,30 @@ async function isAuthorized(req: NextRequest): Promise<boolean> {
   return false;
 }
 
-function getGmailClient() {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN;
-  if (!refreshToken) {
-    throw new Error("Missing Gmail refresh token in environment");
-  }
-
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  return google.gmail({ version: "v1", auth: oauth2Client });
-}
-
 async function handleWatchRequest(req: NextRequest) {
-  try {
-    const authorized = await isAuthorized(req);
-    if (!authorized) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const authorized = await isAuthorized(req);
+  if (!authorized) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    const topicName = process.env.GOOGLE_PUBSUB_TOPIC;
-    if (!topicName || !topicName.startsWith("projects/") || !topicName.includes("/topics/")) {
-      console.error("[Watch] Invalid GOOGLE_PUBSUB_TOPIC configuration.");
-      return NextResponse.json(
-        { success: false, error: "Server missing valid GOOGLE_PUBSUB_TOPIC" } as WatchOperationResult,
-        { status: 500 }
-      );
-    }
+  const result = await registerGmailWatch();
 
-    const gmail = getGmailClient();
-    const res = await gmail.users.watch(
-      {
-        userId: "me",
-        requestBody: {
-          labelIds: ["INBOX"],
-          topicName,
-        },
-      },
-      { timeout: 10000 }
-    );
-
-    const { historyId, expiration } = res.data;
-
-    if (!historyId || !expiration) {
-      console.error("[Watch] Gmail API returned missing historyId or expiration.", res.data);
-      return NextResponse.json(
-        { success: false, error: "Invalid response from Gmail API" } as WatchOperationResult,
-        { status: 502 }
-      );
-    }
-
+  if (!result.success) {
+    const isConfigError = result.error?.includes("GOOGLE_PUBSUB_TOPIC");
     return NextResponse.json(
-      {
-        success: true,
-        historyId: String(historyId),
-        expiration: String(expiration),
-      } as WatchOperationResult,
-      { status: 200 }
-    );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[Watch] Failed to initialize Gmail Watch:", message);
-    return NextResponse.json(
-      { success: false, error: "Internal Server Error" } as WatchOperationResult,
-      { status: 500 }
+      { success: false, error: result.error } as WatchOperationResult,
+      { status: isConfigError ? 500 : 502 }
     );
   }
+
+  return NextResponse.json(
+    {
+      success: true,
+      historyId: result.historyId,
+      expiration: result.expiration,
+    } as WatchOperationResult,
+    { status: 200 }
+  );
 }
 
 export async function GET(req: NextRequest) {

@@ -4,6 +4,7 @@ import { ticketsApi } from "./ticketsApi";
 import { usersApi } from "./usersApi";
 import { meetingsApi } from "./meetingsApi";
 import { projectsApi } from "./projectsApi";
+import { insightsApi } from "./insightsApi";
 
 export const store = configureStore({
   reducer: {
@@ -11,13 +12,15 @@ export const store = configureStore({
     [usersApi.reducerPath]: usersApi.reducer,
     [meetingsApi.reducerPath]: meetingsApi.reducer,
     [projectsApi.reducerPath]: projectsApi.reducer,
+    [insightsApi.reducerPath]: insightsApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(
       ticketsApi.middleware,
       usersApi.middleware,
       meetingsApi.middleware,
-      projectsApi.middleware
+      projectsApi.middleware,
+      insightsApi.middleware
     ),
 });
 

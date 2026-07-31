@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { BarChart } from "lucide-react";
 
 function IconDashboard() {
   return (
@@ -122,6 +123,13 @@ export function Sidebar() {
           label="Dashboard"
           icon={<IconDashboard />}
           isActive={pathname === "/dashboard"}
+        />
+
+        <NavItem
+          href="/insights"
+          label="Insights"
+          icon={<BarChart size={16} strokeWidth={2} />}
+          isActive={pathname.startsWith("/insights")}
         />
 
         <NavItem
