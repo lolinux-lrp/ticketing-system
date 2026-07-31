@@ -8,9 +8,10 @@ interface Props {
   velocity: VelocityMetrics;
   quality: QualityMetrics;
   isLoading: boolean;
+  onCardClick?: (metric: string) => void;
 }
 
-export function VolumeVelocityCards({ volume, velocity, quality, isLoading }: Props) {
+export function VolumeVelocityCards({ volume, velocity, quality, isLoading, onCardClick }: Props) {
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-pulse">
@@ -29,9 +30,22 @@ export function VolumeVelocityCards({ volume, velocity, quality, isLoading }: Pr
     );
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent, metric: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onCardClick?.(metric);
+    }
+  };
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card>
+      <Card 
+        role="button"
+        tabIndex={0}
+        className="cursor-pointer hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] text-left"
+        onClick={() => onCardClick?.('total')}
+        onKeyDown={(e) => handleKeyDown(e, 'total')}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Tickets</CardTitle>
           <Ticket className="h-4 w-4 text-muted-foreground" />
@@ -43,7 +57,13 @@ export function VolumeVelocityCards({ volume, velocity, quality, isLoading }: Pr
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card
+        role="button"
+        tabIndex={0}
+        className="cursor-pointer hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] text-left"
+        onClick={() => onCardClick?.('resolved')}
+        onKeyDown={(e) => handleKeyDown(e, 'resolved')}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
           <CheckCircle className="h-4 w-4 text-muted-foreground" />
@@ -55,7 +75,13 @@ export function VolumeVelocityCards({ volume, velocity, quality, isLoading }: Pr
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card
+        role="button"
+        tabIndex={0}
+        className="cursor-pointer hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] text-left"
+        onClick={() => onCardClick?.('velocity')}
+        onKeyDown={(e) => handleKeyDown(e, 'velocity')}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Avg Resolution Time</CardTitle>
           <Clock className="h-4 w-4 text-muted-foreground" />
@@ -67,7 +93,13 @@ export function VolumeVelocityCards({ volume, velocity, quality, isLoading }: Pr
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card
+        role="button"
+        tabIndex={0}
+        className="cursor-pointer hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] text-left"
+        onClick={() => onCardClick?.('sla')}
+        onKeyDown={(e) => handleKeyDown(e, 'sla')}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">SLA Compliance</CardTitle>
           <Zap className="h-4 w-4 text-muted-foreground" />

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { Prisma } from "@prisma/client";
+import { parseInsightsFilters } from "@/lib/insights-filters";
 import {
   InsightsData,
   VolumeMetrics,
@@ -16,78 +14,25 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { error: filterError, status, filters } = await parseInsightsFilters(req);
+    if (filterError || !filters) {
+      return NextResponse.json({ error: filterError }, { status: status || 500 });
     }
+    const { baseWhere, startDate, endDate } = filters;
 
-    const { searchParams } = new URL(req.url);
-    const timeframe = searchParams.get("timeframe") || "month";
-    const startDateParam = searchParams.get("startDate");
-    const endDateParam = searchParams.get("endDate");
-    const projectId = searchParams.get("projectId");
-    const priority = searchParams.get("priority");
-    const userId = searchParams.get("userId");
-
-    // Strict RBAC: If fetching for a specific user, ensure it's the current user OR an ADMIN
-    if (userId) {
-      const userRole = (session.user as { role?: string }).role;
-      const sessionUserId = (session.user as { id?: string }).id;
-      
-      if (userRole !== "ADMIN" && sessionUserId !== userId) {
-        return NextResponse.json(
-          { error: "Forbidden: You do not have permission to view this user's insights." },
-          { status: 403 }
-        );
-      }
-    }
-
-    let startDate: Date;
-    let endDate: Date = new Date();
-
-    if (timeframe === "custom" && startDateParam && endDateParam) {
-      startDate = new Date(startDateParam);
-      endDate = new Date(endDateParam);
-      // Make end date inclusive of the entire day
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date();
-      if (timeframe === "today") {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (timeframe === "week") {
-        startDate.setDate(startDate.getDate() - 7);
-      } else {
-        startDate.setMonth(startDate.getMonth() - 1);
-      }
-    }
-
-    const baseWhere: Prisma.TicketWhereInput = {
-      createdAt: {
-        gte: startDate,
-        lte: endDate,
-      },
-    };
-
-    if (projectId && projectId !== "all") {
-      baseWhere.projectId = projectId;
-    }
-    
-    if (priority && priority !== "all") {
-      baseWhere.priority = priority as Prisma.EnumPriorityFilter | "P1" | "P2" | "P3" | "P4";
-    }
-
-    if (userId) {
-      baseWhere.assignedToId = userId;
-    }
+    const globalBaseWhere = { ...baseWhere };
+    delete globalBaseWhere.status;
 
     // 1. Prisma count for Volume Metrics
-    const totalTickets = await prisma.ticket.count({ where: baseWhere });
-    const resolvedTickets = await prisma.ticket.count({
-      where: { ...baseWhere, status: "RESOLVED" },
-    });
-    const backlogCount = await prisma.ticket.count({
-      where: { ...baseWhere, status: { in: ["OPEN", "IN_PROGRESS"] } },
-    });
+    const [totalTickets, resolvedTickets, backlogCount] = await prisma.$transaction([
+      prisma.ticket.count({ where: globalBaseWhere }),
+      prisma.ticket.count({
+        where: { ...globalBaseWhere, status: "RESOLVED" },
+      }),
+      prisma.ticket.count({
+        where: { ...globalBaseWhere, status: { in: ["OPEN", "IN_PROGRESS"] } },
+      }),
+    ]);
 
     const resolutionRatePercentage =
       totalTickets > 0 ? (resolvedTickets / totalTickets) * 100 : 0;
@@ -135,13 +80,11 @@ export async function GET(req: Request) {
         userId,
         name: usersMap[userId] || "Unknown User",
         resolvedCount: g._count.id,
-        // Calculate SLA compliance later or mock if tracking is complex, using 100% as baseline for now if resolved
-        slaCompliancePercentage: 100,
+        slaCompliancePercentage: 0, // Placeholder as we calculate this below per user or omit it visually later
       };
     });
 
     // 3. To get Velocity, Quality, and Trends, we need timestamp data.
-    // We fetch a lightweight projection to calculate everything on the server
     const ticketsForMetrics = await prisma.ticket.findMany({
       where: baseWhere,
       select: {
@@ -149,6 +92,7 @@ export async function GET(req: Request) {
         createdAt: true,
         resolvedAt: true,
         status: true,
+        assignedToId: true,
         messages: {
           where: {
             senderType: { in: ["AGENT", "SYSTEM"] },
@@ -171,9 +115,10 @@ export async function GET(req: Request) {
     let slaCompliantCount = 0;
 
     const trendsMap: Record<string, { created: number; resolved: number }> = {};
+    const userSlaMap: Record<string, { resolved: number; compliant: number }> = {};
 
     ticketsForMetrics.forEach((t) => {
-      // Trend processing
+      // Trend processing (using UTC to be consistent)
       const dateKey = t.createdAt.toISOString().split("T")[0];
       if (!trendsMap[dateKey]) {
         trendsMap[dateKey] = { created: 0, resolved: 0 };
@@ -181,20 +126,32 @@ export async function GET(req: Request) {
       trendsMap[dateKey].created += 1;
 
       if (t.status === "RESOLVED" && t.resolvedAt) {
-        const resolvedDateKey = t.resolvedAt.toISOString().split("T")[0];
-        if (!trendsMap[resolvedDateKey]) {
-          trendsMap[resolvedDateKey] = { created: 0, resolved: 0 };
+        // Only count resolved for trends if the resolved date is within our timeframe
+        if (t.resolvedAt >= startDate && t.resolvedAt <= endDate) {
+          const resolvedDateKey = t.resolvedAt.toISOString().split("T")[0];
+          if (!trendsMap[resolvedDateKey]) {
+            trendsMap[resolvedDateKey] = { created: 0, resolved: 0 };
+          }
+          trendsMap[resolvedDateKey].resolved += 1;
         }
-        trendsMap[resolvedDateKey].resolved += 1;
 
         // Velocity: Resolution Time
         const resolutionTimeMs = t.resolvedAt.getTime() - t.createdAt.getTime();
         totalResolutionTime += resolutionTimeMs / (1000 * 60 * 60);
         resolvedWithTimeCount += 1;
 
-        // SLA Compliance (assuming < 24h is compliant for example purposes)
-        if (resolutionTimeMs <= 24 * 60 * 60 * 1000) {
+        // SLA Compliance (< 24h)
+        const isCompliant = resolutionTimeMs <= 24 * 60 * 60 * 1000;
+        if (isCompliant) {
           slaCompliantCount += 1;
+        }
+
+        if (t.assignedToId) {
+          if (!userSlaMap[t.assignedToId]) {
+            userSlaMap[t.assignedToId] = { resolved: 0, compliant: 0 };
+          }
+          userSlaMap[t.assignedToId].resolved += 1;
+          if (isCompliant) userSlaMap[t.assignedToId].compliant += 1;
         }
       }
 
@@ -204,6 +161,13 @@ export async function GET(req: Request) {
         const responseTimeMs = firstMsgDate.getTime() - t.createdAt.getTime();
         totalFirstResponseTime += responseTimeMs / (1000 * 60 * 60);
         respondedTicketsCount += 1;
+      }
+    });
+
+    leaderboard.forEach((entry) => {
+      const stats = userSlaMap[entry.userId];
+      if (stats && stats.resolved > 0) {
+        entry.slaCompliancePercentage = (stats.compliant / stats.resolved) * 100;
       }
     });
 
@@ -218,10 +182,10 @@ export async function GET(req: Request) {
         : 0;
 
     const slaCompliancePercentage =
-      resolvedTickets > 0 ? (slaCompliantCount / resolvedTickets) * 100 : 0;
+      resolvedWithTimeCount > 0 ? (slaCompliantCount / resolvedWithTimeCount) * 100 : 0;
     
-    // For now reopen rate is a placeholder (needs audit log to track properly)
-    const reopenRatePercentage = 0; 
+    // For now reopen rate is a placeholder
+    const reopenRatePercentage = null; 
 
     const velocity: VelocityMetrics = {
       averageResolutionTime,

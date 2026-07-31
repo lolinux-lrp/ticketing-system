@@ -17,7 +17,7 @@ export default async function PersonalInsightsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <Suspense fallback={null}>
-        <FilterBar />
+        <FilterBar userId={userId} />
         <InsightsDashboard userId={userId} />
       </Suspense>
     </div>

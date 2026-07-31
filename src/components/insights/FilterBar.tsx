@@ -3,8 +3,13 @@
 import React, { useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useGetProjectsQuery } from "@/store/ticketsApi";
+import { Download } from "lucide-react";
 
-export function FilterBar() {
+interface FilterBarProps {
+  userId?: string;
+}
+
+export function FilterBar({ userId }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -35,9 +40,17 @@ export function FilterBar() {
     router.push(pathname + "?" + newQueryString);
   };
 
+  const handleExportCsv = () => {
+    const exportParams = new URLSearchParams(searchParams.toString());
+    if (userId) exportParams.set('userId', userId);
+    
+    const url = `/api/insights/export?${exportParams.toString()}`;
+    window.location.href = url;
+  };
+
   return (
     <div className="flex flex-col gap-4 mb-6 p-4 rounded-xl border border-[var(--border)] bg-[var(--surface-1)]">
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4 items-end">
         <div className="flex flex-col gap-1.5 flex-1">
           <label htmlFor="timeframe" className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             Timeframe
@@ -91,35 +104,56 @@ export function FilterBar() {
             ))}
           </select>
         </div>
+
+        <div className="flex-none">
+          <button
+            onClick={handleExportCsv}
+            aria-label="Export to CSV"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-2)] border border-[var(--border)] rounded-md text-sm font-medium hover:bg-[var(--surface-3)] transition-colors h-[38px] text-[var(--text-primary)]"
+            title="Export CSV"
+          >
+            <Download className="w-4 h-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+        </div>
       </div>
 
       {timeframe === "custom" && (
-        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-[var(--border)]">
-          <div className="flex flex-col gap-1.5 flex-1">
-            <label htmlFor="startDate" className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              Start Date
-            </label>
-            <input
-              type="date"
-              id="startDate"
-              value={startDate}
-              onChange={(e) => handleFilterChange("startDate", e.target.value)}
-              className="input-base px-3 py-2 text-sm w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-md outline-none focus:border-[var(--brand)]"
-            />
+        <div className="flex flex-col gap-2 pt-4 border-t border-[var(--border)]">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label htmlFor="startDate" className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Start Date
+              </label>
+              <input
+                type="date"
+                id="startDate"
+                max={endDate || undefined}
+                value={startDate}
+                onChange={(e) => handleFilterChange("startDate", e.target.value)}
+                className="input-base px-3 py-2 text-sm w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-md outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label htmlFor="endDate" className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                End Date
+              </label>
+              <input
+                type="date"
+                id="endDate"
+                min={startDate || undefined}
+                value={endDate}
+                onChange={(e) => handleFilterChange("endDate", e.target.value)}
+                className="input-base px-3 py-2 text-sm w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-md outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div className="flex-1 hidden sm:block"></div>
           </div>
-          <div className="flex flex-col gap-1.5 flex-1">
-            <label htmlFor="endDate" className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              End Date
-            </label>
-            <input
-              type="date"
-              id="endDate"
-              value={endDate}
-              onChange={(e) => handleFilterChange("endDate", e.target.value)}
-              className="input-base px-3 py-2 text-sm w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-md outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-          <div className="flex-1 hidden sm:block"></div>
+          {(!startDate || !endDate) && (
+            <p className="text-xs text-orange-500 mt-1">
+              Please select both a start and end date for custom timeframe.
+            </p>
+          )}
         </div>
       )}
     </div>

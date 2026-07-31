@@ -129,7 +129,7 @@ export function Sidebar() {
           href="/insights"
           label="Insights"
           icon={<BarChart size={16} strokeWidth={2} />}
-          isActive={pathname === "/insights"}
+          isActive={pathname.startsWith("/insights")}
         />
 
         <NavItem

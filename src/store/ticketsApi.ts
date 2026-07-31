@@ -9,6 +9,7 @@ import type {
   UpdateTicketPayload,
 } from "@/types";
 import { subscribeToRealtime } from "./realtime";
+import { insightsApi } from "./insightsApi";
 
 export interface Project {
   id: string;
@@ -54,6 +55,7 @@ export const ticketsApi = createApi({
           () => {
             dispatch(ticketsApi.util.invalidateTags(['Ticket']));
             dispatch(ticketsApi.util.invalidateTags(['Analytics']));
+            dispatch(insightsApi.util.invalidateTags(['Analytics']));
           }
         );
         await handler();
@@ -66,6 +68,12 @@ export const ticketsApi = createApi({
         body,
       }),
       invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
+        } catch {}
+      }
     }),
     updateTicket: builder.mutation<
       Ticket,
@@ -79,6 +87,7 @@ export const ticketsApi = createApi({
       async onQueryStarted({ id, body }, { dispatch, queryFulfilled }) {
         try {
           const { data: updatedTicket } = await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
           dispatch(
             ticketsApi.util.updateQueryData("getTicket", id, (draft) => {
               Object.assign(draft.ticket, updatedTicket);
@@ -106,6 +115,12 @@ export const ticketsApi = createApi({
         method: "DELETE",
       }),
       invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
+        } catch {}
+      }
     }),
     getTicket: builder.query<{ ticket: Ticket }, string>({
       query: (id) => `tickets/${id}`,
@@ -118,6 +133,7 @@ export const ticketsApi = createApi({
           () => {
             dispatch(ticketsApi.util.invalidateTags([{ type: 'Ticket', id: arg }, 'Meeting']));
             dispatch(ticketsApi.util.invalidateTags(['Analytics']));
+            dispatch(insightsApi.util.invalidateTags(['Analytics']));
           }
         );
         await handler();
@@ -133,6 +149,12 @@ export const ticketsApi = createApi({
         body,
       }),
       invalidatesTags: ['Ticket', 'Meeting', 'Analytics'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(insightsApi.util.invalidateTags(['Analytics']));
+        } catch {}
+      }
     }),
     getProjects: builder.query<Project[], void>({
       query: () => "projects",

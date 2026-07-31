@@ -21,19 +21,30 @@ export async function register() {
   const { registerGmailWatch } = await import("@/lib/gmail-watch");
 
   console.log("[startup] Registering Gmail watch subscription...");
-  const result = await registerGmailWatch();
-
-  if (result.success) {
-    console.log(
-      `[startup] Gmail watch active. Expires: ${new Date(Number(result.expiration)).toISOString()}`
-    );
-  } else {
-    // Log the failure but do not throw — a failed watch registration
-    // should not prevent the server from starting. The daily cron will
-    // retry automatically.
-    console.error(
-      "[startup] Gmail watch registration failed on startup:",
-      result.error
-    );
-  }
+  
+  // Run asynchronously without awaiting so startup isn't blocked
+  registerGmailWatch().then((result) => {
+    if (result.success) {
+      let expirationStr = "unknown";
+      if (result.expiration) {
+        const date = new Date(Number(result.expiration));
+        if (!isNaN(date.getTime())) {
+          expirationStr = date.toISOString();
+        }
+      }
+      console.log(
+        `[startup] Gmail watch active. Expires: ${expirationStr}`
+      );
+    } else {
+      // Log the failure but do not throw — a failed watch registration
+      // should not prevent the server from starting. The daily cron will
+      // retry automatically.
+      console.error(
+        "[startup] Gmail watch registration failed on startup:",
+        result.error
+      );
+    }
+  }).catch((err) => {
+    console.error("[startup] Unhandled error registering Gmail watch:", err);
+  });
 }

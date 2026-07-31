@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { AgentSearch } from "@/components/insights/AgentSearch";
 
 export function InsightsNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === "ADMIN";
 
   return (
-    <div className="border-b border-[var(--border)] bg-[var(--surface-1)] px-6">
+    <div className="border-b border-[var(--border)] bg-[var(--surface-1)] px-6 flex items-center justify-between">
       <nav className="-mb-px flex space-x-8">
         <Link
           href="/insights/global"
@@ -30,6 +34,11 @@ export function InsightsNav() {
           My Performance
         </Link>
       </nav>
+      {isAdmin && (
+        <div className="py-2">
+          <AgentSearch />
+        </div>
+      )}
     </div>
   );
 }

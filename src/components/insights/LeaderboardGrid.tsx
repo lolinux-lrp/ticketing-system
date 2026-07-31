@@ -59,6 +59,13 @@ export function LeaderboardGrid({ data, isLoading }: Props) {
     return sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent, field: SortField) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSort(field);
+    }
+  };
+
   return (
     <Card className="col-span-full lg:col-span-1 mt-4">
       <CardHeader>
@@ -74,8 +81,11 @@ export function LeaderboardGrid({ data, isLoading }: Props) {
               <tr>
                 <th
                   scope="col"
-                  className="px-4 py-3 cursor-pointer hover:bg-muted/80 rounded-tl-lg"
+                  tabIndex={0}
+                  aria-sort={sortField === 'name' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  className="px-4 py-3 cursor-pointer hover:bg-muted/80 rounded-tl-lg focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                   onClick={() => handleSort('name')}
+                  onKeyDown={(e) => handleKeyDown(e, 'name')}
                 >
                   <div className="flex items-center gap-1">
                     Agent
@@ -84,8 +94,11 @@ export function LeaderboardGrid({ data, isLoading }: Props) {
                 </th>
                 <th
                   scope="col"
-                  className="px-4 py-3 cursor-pointer hover:bg-muted/80"
+                  tabIndex={0}
+                  aria-sort={sortField === 'resolvedCount' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  className="px-4 py-3 cursor-pointer hover:bg-muted/80 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                   onClick={() => handleSort('resolvedCount')}
+                  onKeyDown={(e) => handleKeyDown(e, 'resolvedCount')}
                 >
                   <div className="flex items-center gap-1">
                     Resolved
@@ -94,8 +107,11 @@ export function LeaderboardGrid({ data, isLoading }: Props) {
                 </th>
                 <th
                   scope="col"
-                  className="px-4 py-3 cursor-pointer hover:bg-muted/80 rounded-tr-lg"
+                  tabIndex={0}
+                  aria-sort={sortField === 'slaCompliancePercentage' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  className="px-4 py-3 cursor-pointer hover:bg-muted/80 rounded-tr-lg focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                   onClick={() => handleSort('slaCompliancePercentage')}
+                  onKeyDown={(e) => handleKeyDown(e, 'slaCompliancePercentage')}
                 >
                   <div className="flex items-center gap-1">
                     SLA %
@@ -111,10 +127,10 @@ export function LeaderboardGrid({ data, isLoading }: Props) {
                   className="bg-card border-b last:border-0 hover:bg-muted/30 transition-colors"
                 >
                   <td className="px-4 py-3 font-medium flex items-center gap-2">
-                    {index === 0 && <Trophy className="h-4 w-4 text-yellow-500" />}
-                    {index === 1 && <Trophy className="h-4 w-4 text-gray-400" />}
-                    {index === 2 && <Trophy className="h-4 w-4 text-amber-600" />}
-                    {index > 2 && <span className="w-4 inline-block text-center text-muted-foreground">{index + 1}.</span>}
+                    {sortField === 'resolvedCount' && index === 0 && <Trophy className="h-4 w-4 text-yellow-500" />}
+                    {sortField === 'resolvedCount' && index === 1 && <Trophy className="h-4 w-4 text-gray-400" />}
+                    {sortField === 'resolvedCount' && index === 2 && <Trophy className="h-4 w-4 text-amber-600" />}
+                    {(sortField !== 'resolvedCount' || index > 2) && <span className="w-4 inline-block text-center text-muted-foreground">{index + 1}.</span>}
                     {entry.name}
                   </td>
                   <td className="px-4 py-3">{entry.resolvedCount}</td>

@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { InsightsData, GetInsightsQueryParams } from "@/types";
+import type { InsightsData, GetInsightsQueryParams, PaginatedDeepDiveResponse } from "@/types";
 
 export const insightsApi = createApi({
   reducerPath: "insightsApi",
@@ -14,7 +14,14 @@ export const insightsApi = createApi({
       }),
       providesTags: ["Analytics"],
     }),
+    getDeepDiveTickets: builder.query<PaginatedDeepDiveResponse, GetInsightsQueryParams>({
+      query: (params) => ({
+        url: "insights/deep-dive",
+        params: params,
+      }),
+      providesTags: ["Analytics"],
+    }),
   }),
 });
 
-export const { useGetInsightsQuery } = insightsApi;
+export const { useGetInsightsQuery, useGetDeepDiveTicketsQuery } = insightsApi;
