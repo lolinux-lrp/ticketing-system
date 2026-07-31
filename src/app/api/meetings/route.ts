@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
       if (session.user.role === "CUSTOMER" && ticketForEmail.createdById !== session.user.id) {
         return NextResponse.json({ error: "Forbidden: Not authorized to link this ticket" }, { status: 403 });
       }
-      if (session.user.role === "AGENT" && ticketForEmail.assignedToId !== session.user.id) {
+      if (session.user.role === "USER" && ticketForEmail.assignedToId !== session.user.id) {
         return NextResponse.json({ error: "Forbidden: Not authorized to link this ticket" }, { status: 403 });
       }
     }

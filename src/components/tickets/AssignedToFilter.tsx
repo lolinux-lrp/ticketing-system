@@ -6,7 +6,7 @@ import type { TicketUser } from "@/types";
 interface AssignedToFilterProps {
   users: TicketUser[];
   currentUserId: string;
-  role: "ADMIN" | "AGENT" | "CUSTOMER";
+  role: "ADMIN" | "USER" | "CUSTOMER";
   value: string | undefined;
   onChange: (userId: string | undefined) => void;
 }

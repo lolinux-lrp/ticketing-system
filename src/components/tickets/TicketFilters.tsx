@@ -5,7 +5,7 @@ import type { Priority, Status } from "@/types";
 import type { TicketFiltersState } from "./useTicketFilters";
 import { useGetProjectsQuery } from "@/store/ticketsApi";
 import { useSession } from "next-auth/react";
-import { useGetAgentsQuery } from "@/store/usersApi";
+import { useGetStandardUsersQuery } from "@/store/usersApi";
 import { AssignedToFilter } from "./AssignedToFilter";
 
 const STATUS_OPTIONS: Status[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -60,7 +60,7 @@ export function TicketFilters({
   showMineToggle,
 }: TicketFiltersProps) {
   const { data: session } = useSession();
-  const { data: agents } = useGetAgentsQuery(undefined, { 
+  const { data: agents } = useGetStandardUsersQuery(undefined, { 
     skip: !session || session.user.role !== "ADMIN" 
   });
   const { data: projects } = useGetProjectsQuery();
@@ -169,7 +169,7 @@ export function TicketFilters({
           <AssignedToFilter
             users={agents || []}
             currentUserId={session.user.id}
-            role={session.user.role as "ADMIN" | "AGENT" | "CUSTOMER"}
+            role={session.user.role as "ADMIN" | "USER" | "CUSTOMER"}
             value={filters.assignedToId}
             onChange={(userId) => onChange({ ...filters, assignedToId: userId })}
           />

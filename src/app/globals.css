@@ -110,7 +110,6 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────── */

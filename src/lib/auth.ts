@@ -38,7 +38,7 @@ export const authOptions: NextAuthOptions = {
 
                 const user = await prisma.user.findUnique({ where: { email } });
 
-                if (!user || !user.password) return null;
+                if (!user || !user.password || user.deletedAt) return null;
 
                 const isValidPassword = await bcrypt.compare(password, user.password);
                 if (!isValidPassword) return null;
@@ -58,10 +58,10 @@ export const authOptions: NextAuthOptions = {
                 // This is the single source of truth and prevents any token cross-contamination.
                 const dbUser = await prisma.user.findUnique({
                     where: { email: user.email },
-                    select: { id: true, role: true, email: true },
+                    select: { id: true, role: true, email: true, deletedAt: true },
                 });
 
-                if (!dbUser) {
+                if (!dbUser || dbUser.deletedAt) {
                     // Brand-new OAuth user: the adapter may not have committed them yet.
                     // Throw to abort the session rather than risk falling back to a stale id.
                     throw new Error("Authentication failed: User record not found after sign-in.");
@@ -78,10 +78,10 @@ export const authOptions: NextAuthOptions = {
                 // Token refresh — re-validate against DB to prevent stale sessions
                 const dbUser = await prisma.user.findUnique({
                     where: { id: token.id },
-                    select: { id: true, role: true, email: true },
+                    select: { id: true, role: true, email: true, deletedAt: true },
                 });
 
-                if (!dbUser) {
+                if (!dbUser || dbUser.deletedAt) {
                     // User was deleted — invalidate the token
                     return {} as typeof token;
                 }

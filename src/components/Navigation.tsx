@@ -52,7 +52,7 @@ function getInitials(name: string) {
 
 const AVATAR_COLORS: Record<string, string> = {
   ADMIN: "#6366f1",
-  AGENT: "#0ea5e9",
+  USER: "#0ea5e9",
   CUSTOMER: "#10b981",
 };
 

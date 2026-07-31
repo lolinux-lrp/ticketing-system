@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    if (session.user.role !== "AGENT" && session.user.role !== "ADMIN" && ticket.createdById !== session.user.id) {
+    if (session.user.role !== "USER" && session.user.role !== "ADMIN" && ticket.createdById !== session.user.id) {
        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const senderType =
-      session.user.role === "AGENT" || session.user.role === "ADMIN"
+      session.user.role === "USER" || session.user.role === "ADMIN"
         ? TicketMessageSenderType.AGENT
         : TicketMessageSenderType.CLIENT;
 
@@ -178,10 +178,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     revalidatePath("/tickets");
     revalidatePath(`/tickets/${ticketId}`);
-    // @ts-expect-error Next.js canary type bug
-    revalidateTag("tickets");
-    // @ts-expect-error Next.js canary type bug
-    revalidateTag(`ticket-${ticketId}`);
+    revalidateTag("tickets", "max");
+    revalidateTag(`ticket-${ticketId}`, "max");
 
     broadcastTicketMutation(ticketId, "MESSAGE_ADDED");
 

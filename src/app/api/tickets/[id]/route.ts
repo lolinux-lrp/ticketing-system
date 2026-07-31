@@ -166,10 +166,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     revalidatePath("/tickets");
     revalidatePath(`/tickets/${id}`);
-    // @ts-expect-error Next.js canary type bug
-    revalidateTag("tickets");
-    // @ts-expect-error Next.js canary type bug
-    revalidateTag(`ticket-${id}`);
+    revalidateTag("tickets", "max");
+    revalidateTag(`ticket-${id}`, "max");
 
     broadcastTicketMutation(id, "STATUS_CHANGED");
 
@@ -250,10 +248,8 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
     revalidatePath("/tickets");
     revalidatePath(`/tickets/${id}`);
-    // @ts-expect-error Next.js canary type bug
-    revalidateTag("tickets");
-    // @ts-expect-error Next.js canary type bug
-    revalidateTag(`ticket-${id}`);
+    revalidateTag("tickets", "max");
+    revalidateTag(`ticket-${id}`, "max");
 
     broadcastTicketDeleted(id, {
       createdById: deletedTicket.createdById,

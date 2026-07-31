@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "All Tickets",
@@ -46,8 +45,6 @@ export function TopBar({ onOpenCreate }: TopBarProps) {
 
       {/* Right controls */}
       <div className="flex items-center gap-2 shrink-0">
-        <ThemeToggle />
-
         <button
           id="create-ticket-btn"
           onClick={onOpenCreate}

@@ -13,7 +13,7 @@ function getInitials(name: string) {
 
 const ROLE_COLORS: Record<string, string> = {
   SYSTEM: "#6366f1", // purple/indigo
-  AGENT: "#0ea5e9", // blue
+  USER: "#0ea5e9", // blue
   CLIENT: "#10b981", // green
 };
 

@@ -10,10 +10,10 @@ import { can } from "@/lib/auth/policy";
 const inviteSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-  role: z.enum(["AGENT", "ADMIN"]),
+  role: z.enum(["USER", "ADMIN"]),
 });
 
-const ROLE_RANK: Record<string, number> = { CUSTOMER: 0, AGENT: 1, ADMIN: 2 };
+const ROLE_RANK: Record<string, number> = { CUSTOMER: 0, USER: 1, ADMIN: 2 };
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Trying to invite an ADMIN to become an AGENT — that's a demotion, refuse it
+      // Trying to invite an ADMIN to become a USER — that's a demotion, refuse it
       if (targetRank < currentRank) {
         return NextResponse.json(
           { error: `Cannot invite an ${existingUser.role} to a lower role (${role}). Change their role manually if needed.` },
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Role upgrade (e.g. CUSTOMER → AGENT, CUSTOMER → ADMIN, AGENT → ADMIN)
+      // Role upgrade (e.g. CUSTOMER → USER, CUSTOMER → ADMIN, USER → ADMIN)
       const updated = await prisma.user.update({
         where: { email },
         data: { role },
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
           identifier_token: { identifier: email, token } 
         } 
       });
-      await prisma.user.delete({ where: { email } });
+      await prisma.user.update({ where: { email }, data: { deletedAt: new Date() } });
       throw emailError;
     }
 

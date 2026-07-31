@@ -363,6 +363,9 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
             },
           },
         });
+        orConditions.push({
+          messageId: { in: refs },
+        });
       }
 
       if (orConditions.length > 0) {
@@ -433,9 +436,9 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
 
         const recipientsToEcho: string[] = [...updatedCcEmails];
         if (matchedTicket.assignedToId) {
-          const agent = await prisma.user.findUnique({ where: { id: matchedTicket.assignedToId } });
-          if (agent && agent.email && agent.email !== senderEmail) {
-            recipientsToEcho.push(agent.email);
+          const user = await prisma.user.findUnique({ where: { id: matchedTicket.assignedToId } });
+          if (user && user.email && user.email !== senderEmail) {
+            recipientsToEcho.push(user.email);
           }
         }
 
@@ -537,18 +540,11 @@ export async function processIncomingEmails(startHistoryId?: string | number): P
           include: { project: true },
         });
 
-        await tx.ticketMessage.create({
-          data: {
-            ticketId: newTicket.id,
-            senderType: "CLIENT",
-            senderEmail,
-            content: cleanedBody,
-            to: toHeader || null,
-            cc: ccHeader || null,
-            bcc: bccHeader || null,
-            messageId: cleanMessageId || null,
-          }
-        });
+        // NOTE: We intentionally do NOT create a TicketMessage here.
+        // The opening email body is stored in ticket.description and displayed
+        // in the "Original Issue" card on the detail page. Creating a message
+        // here was causing the description to appear as a duplicate CLIENT
+        // reply/bubble in the conversation timeline.
 
         return newTicket;
       });

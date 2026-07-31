@@ -3,20 +3,37 @@ import { PubSubPushPayload, PubSubDecodedData } from "@/types/gmail";
 import { processIncomingEmails } from "@/services/email-ingestion.service";
 import { after } from "next/server";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
-    
     if (!process.env.CRON_SECRET) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
-    const a = Buffer.from(authHeader, "utf8");
-    const b = Buffer.from(expectedHeader, "utf8");
-    
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+    const expectedSecret = process.env.CRON_SECRET;
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+    let isAuthorized = false;
+
+    // Strategy 1: Static Secret
+    const a = Buffer.from(token, "utf8");
+    const b = Buffer.from(expectedSecret, "utf8");
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      isAuthorized = true;
+    } else {
+      // Strategy 2: Google OIDC
+      try {
+        const authClient = new OAuth2Client();
+        await authClient.verifyIdToken({ idToken: token });
+        isAuthorized = true;
+      } catch (err: unknown) {
+        console.error("Failed to verify OIDC token:", err);
+      }
+    }
+
+    if (!isAuthorized) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 

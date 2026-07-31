@@ -8,7 +8,7 @@ import {
   useGetTicketQuery,
   useUpdateTicketMutation,
 } from "@/store/ticketsApi";
-import { useGetAgentsQuery } from "@/store/usersApi";
+import { useGetStandardUsersQuery } from "@/store/usersApi";
 import { TicketTimelineSection } from "@/components/timeline/TicketTimelineSection";
 import { AssigneeSearch } from "@/components/tickets/AssigneeSearch";
 import { StatusBadge } from "@/components/tickets/StatusBadge";
@@ -39,14 +39,14 @@ export default function TicketDetailPage() {
   const ticketId = params.id as string;
   const { data: session, status } = useSession();
   const { data, isLoading, isError } = useGetTicketQuery(ticketId);
-  const { data: agents } = useGetAgentsQuery(undefined, {
+  const { data: usersData } = useGetStandardUsersQuery(undefined, {
     skip: session?.user?.role !== "ADMIN",
   });
   const [updateTicket] = useUpdateTicketMutation();
 
   const isAdmin = session?.user?.role === "ADMIN";
-  const isAgent = session?.user?.role === "AGENT";
-  const canManage = isAdmin || isAgent;
+  const isStandardUser = session?.user?.role === "USER";
+  const canManage = isAdmin || isStandardUser;
 
   const router = useRouter();
 
@@ -251,7 +251,7 @@ export default function TicketDetailPage() {
                     Assignee
                   </label>
                   <AssigneeSearch
-                    agents={agents}
+                    agents={usersData}
                     assignedToId={ticket.assignedToId}
                     onChange={(newId) =>
                       updateTicket({ id: ticketId, body: { assignedToId: newId } })
@@ -260,7 +260,7 @@ export default function TicketDetailPage() {
                 </div>
               )}
 
-              {isAgent && ticket.assignedToId !== session?.user?.id && (
+              {isStandardUser && ticket.assignedToId !== session?.user?.id && (
                 <button
                   onClick={() =>
                     updateTicket({ id: ticketId, body: { assignedToId: session?.user?.id } })
@@ -275,7 +275,7 @@ export default function TicketDetailPage() {
                   Assign to me
                 </button>
               )}
-              {isAgent && ticket.assignedToId === session?.user?.id && (
+              {isStandardUser && ticket.assignedToId === session?.user?.id && (
                 <button
                   onClick={() =>
                     updateTicket({ id: ticketId, body: { assignedToId: null } })

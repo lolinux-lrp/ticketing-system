@@ -5,10 +5,6 @@
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/cron/ingest-gmail",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/check-sla",
       "schedule": "*/10 * * * *"
     }

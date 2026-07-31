@@ -59,7 +59,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
   }
 
   const isOwner = session?.user?.id === ticket.createdById;
-  const canEditResolution = session?.user?.role === "AGENT" || session?.user?.role === "ADMIN";
+  const canEditResolution = session?.user?.role === "USER" || session?.user?.role === "ADMIN";
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>

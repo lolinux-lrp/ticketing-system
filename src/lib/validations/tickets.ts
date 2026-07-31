@@ -41,7 +41,7 @@ export const updateTicketSchema = z.object({
   description: z.string().trim().min(10).optional(),
   status: z.enum(Status).optional(),
   priority: z.preprocess((val) => typeof val === 'string' ? val.toUpperCase() : val, z.nativeEnum(Priority)).optional(),
-  assignedToId: z.string().uuid("Invalid Agent ID").optional().nullable(),
+  assignedToId: z.string().uuid("Invalid User ID").optional().nullable(),
   resolution: z.string().optional(),
 });
 

@@ -121,7 +121,7 @@ function parseMarkdownToHtml(markdown: string): string {
 /**
  * Shape returned by `buildTicketRecipients`.
  * `to`  — The sole primary recipient: always the client's email address.
- * `cc`  — Deduplicated array of secondary stakeholders (agent, ticket CC list,
+ * `cc`  — Deduplicated array of secondary stakeholders (user, ticket CC list,
  *          any extra addresses passed by the caller). The client's address and
  *          the system outbound address are always excluded from this list to
  *          prevent duplicate delivery and routing loops.
@@ -136,13 +136,13 @@ export interface TicketRecipients {
  * ticket email:
  *
  *   To  → Client only   (`contactEmail` or `createdBy.email`)
- *   Cc  → Deduped set of: assigned agent + ticket.ccEmails + additionalCc
+ *   Cc  → Deduped set of: assigned user + ticket.ccEmails + additionalCc
  *
  * OWASP CRLF injection protection: every address is passed through
  * `sanitizeEmailAddress` before being included in any header value.
  *
  * @param clientEmail    - Primary client address (`ticket.contactEmail ?? ticket.createdBy?.email`).
- * @param assignedEmail  - Optional assigned agent email (`ticket.assignedTo?.email`).
+ * @param assignedEmail  - Optional assigned user email (`ticket.assignedTo?.email`).
  * @param ticketCcEmails - CC list stored on the ticket (`ticket.ccEmails`).
  * @param additionalCc   - Extra addresses from the caller (teammates, meeting staff, etc.).
  * @returns `TicketRecipients` with a guaranteed `to` and a clean `cc` array.
@@ -266,7 +266,7 @@ function createTransport() {
 interface InviteEmailOptions {
   name: string;
   email: string;
-  role: "AGENT" | "ADMIN";
+  role: "USER" | "ADMIN";
   signupUrl?: string;
   isUpgrade: boolean;
 }
@@ -278,18 +278,18 @@ export async function sendInviteEmail({ name, email, role, signupUrl, isUpgrade 
 
   const subject = isUpgrade
     ? `Your role has been updated to ${role} on TicketFlow`
-    : `You've been invited to join TicketFlow as ${role === "ADMIN" ? "an Admin" : "an Agent"}`;
+    : `You've been invited to join TicketFlow as ${role === "ADMIN" ? "an Admin" : "a User"}`;
 
   const textBody = isUpgrade
     ? `Hello ${name},\n\nYour role on TicketFlow has been upgraded to ${role}.\nSign in at: ${loginUrl}\n`
-    : `Hello ${name},\n\nYou have been invited to TicketFlow as ${role === "ADMIN" ? "an Admin" : "an Agent"}.\n\nIf you already have a Google account, sign in with Google at:\n${loginUrl}\n\nOr create a password-based account at:\n${finalSignupUrl}\n\nWelcome aboard!`;
+    : `Hello ${name},\n\nYou have been invited to TicketFlow as ${role === "ADMIN" ? "an Admin" : "a User"}.\n\nIf you already have a Google account, sign in with Google at:\n${loginUrl}\n\nOr create a password-based account at:\n${finalSignupUrl}\n\nWelcome aboard!`;
 
   const htmlBody = isUpgrade
     ? `<p>Hello <strong>${name}</strong>,</p>
        <p>Your role on TicketFlow has been upgraded to <strong>${role}</strong>.</p>
        <p><a href="${loginUrl}">Sign in to TicketFlow</a></p>`
     : `<p>Hello <strong>${name}</strong>,</p>
-       <p>You have been invited to TicketFlow as <strong>${role === "ADMIN" ? "an Admin" : "an Agent"}</strong>.</p>
+       <p>You have been invited to TicketFlow as <strong>${role === "ADMIN" ? "an Admin" : "a User"}</strong>.</p>
        <p>You can sign in using:</p>
        <ul>
          <li><a href="${loginUrl}">Sign in with Google</a> (if you have a Google account)</li>
@@ -354,7 +354,7 @@ export async function sendTicketAssignmentEmail({
 }
 
 /**
- * Options for the new-ticket confirmation + agent notification email.
+ * Options for the new-ticket confirmation + user notification email.
  *
  * `clientEmail`   — Primary client address; always lands in `To`.
  * `assignedEmail` — Optional agent/admin address; routed to `Cc`.
@@ -388,7 +388,7 @@ export async function sendNewTicketNotification({
     address: (process.env.GOOGLE_EMAIL || DEFAULT_FROM_EMAIL) as string,
   };
 
-  // Enforce To: Client / Cc: Agent + other stakeholders
+  // Enforce To: Client / Cc: User + other stakeholders
   const { to, cc } = buildTicketRecipients(clientEmail, assignedEmail, ticketCcEmails);
 
   const info = await transport.sendMail({
@@ -463,7 +463,7 @@ export async function sendTicketReplyEmail({
     throw new Error("Cannot send reply: ticket has no client email.");
   }
 
-  // Enforce To: Client / Cc: Agent + Stakeholders
+  // Enforce To: Client / Cc: User + Stakeholders
   const { to, cc } = buildTicketRecipients(
     clientEmail, 
     ticket.assignedTo?.email, 

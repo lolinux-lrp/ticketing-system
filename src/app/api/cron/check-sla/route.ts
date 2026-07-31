@@ -46,13 +46,17 @@ export async function GET(req: NextRequest) {
     oauth2Client.setCredentials({ refresh_token: refreshToken });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const fromAddress = process.env.GOOGLE_EMAIL || process.env.DEFAULT_FROM_EMAIL || "support@ticketflow.com";
-    const execEscalationEmail = process.env.EXEC_ESCALATION_EMAIL;
+    const execEscalationEmails = (process.env.EXEC_ESCALATION_EMAIL || '').split(',').map(e => e.trim()).filter(e => e).join(', ');
     const excludedEmails = (process.env.SLA_EXCLUDED_EMAILS || '').split(',').map(e => e.trim()).filter(e => e);
 
     // SLA Evaluation Logic
     const openTickets = await prisma.ticket.findMany({
       where: {
-        status: { notIn: ['RESOLVED', 'CLOSED'] }
+        status: { notIn: ['RESOLVED', 'CLOSED'] },
+        OR: [
+          { adminEscalatedAt: null },
+          { execEscalatedAt: null }
+        ]
       },
       include: {
         assignedTo: true,
@@ -66,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     // Get admins
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN' },
+      where: { role: 'ADMIN', deletedAt: null },
       select: { email: true }
     });
     
@@ -91,29 +95,29 @@ export async function GET(req: NextRequest) {
               priority: ticket.priority,
               hoursOpen: createdHrs.toFixed(1)
             });
-            const encodedMessage = buildMimeMessage("undisclosed-recipients:;", `"TicketFlow SLA" <${fromAddress}>`, rendered, { bcc: adminEmails.join(', ') });
+            const encodedMessage = buildMimeMessage(adminEmails.join(', '), `"TicketFlow SLA" <${fromAddress}>`, rendered);
             await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodedMessage } });
             await new Promise(resolve => setTimeout(resolve, 500));
-            
-            await prisma.ticket.update({
-              where: { id: ticket.id },
-              data: { adminEscalatedAt: new Date() }
-            });
-            processedCount++;
           }
+            
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: { adminEscalatedAt: new Date() }
+          });
+          processedCount++;
         } 
         // Level 2: Executive Escalation
         else if (ticket.adminEscalatedAt && !ticket.execEscalatedAt) {
           const hoursSinceAdmin = (now.getTime() - ticket.adminEscalatedAt.getTime()) / (1000 * 60 * 60);
           if (hoursSinceAdmin > 2) {
-            if (execEscalationEmail) {
+            if (execEscalationEmails) {
               const rendered = EmailTemplates.renderSLAExecEscalation({
                 ticketId: ticket.id,
                 title: ticket.title,
                 priority: ticket.priority,
                 hoursOpen: createdHrs.toFixed(1)
               });
-              const encodedMessage = buildMimeMessage(execEscalationEmail, `"TicketFlow Exec Alerts" <${fromAddress}>`, rendered);
+              const encodedMessage = buildMimeMessage(execEscalationEmails, `"TicketFlow Exec Alerts" <${fromAddress}>`, rendered);
               await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodedMessage } });
               await new Promise(resolve => setTimeout(resolve, 500));
               

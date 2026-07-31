@@ -3,7 +3,7 @@ import { Role } from "@/types";
 export type Action =
   // User Management
   | "user:invite"
-  | "user:list_agents"
+  | "user:list_users"
   // Ticket Actions
   | "ticket:create"
   | "ticket:view"
@@ -36,14 +36,14 @@ export function can(user: SessionUser, action: Action, resource?: TicketResource
     case "user:invite":
       return role === "ADMIN";
 
-    case "user:list_agents":
-      return role === "ADMIN" || role === "AGENT";
+    case "user:list_users":
+      return role === "ADMIN" || role === "USER";
 
     case "ticket:create":
       return true; // Any authenticated user can create a ticket
 
     case "ticket:view":
-      if (role === "ADMIN" || role === "AGENT") return true;
+      if (role === "ADMIN" || role === "USER") return true;
       if (role === "CUSTOMER") {
         return !!resource && "createdById" in resource && resource.createdById === user.id;
       }
@@ -51,16 +51,16 @@ export function can(user: SessionUser, action: Action, resource?: TicketResource
 
     case "ticket:update_content":
       // Only the ticket creator can update the content (title/description)
-      // Even Admins/Agents cannot edit someone else's title/description
+      // Even Admins/Users cannot edit someone else's title/description
       return !!resource && "createdById" in resource && resource.createdById === user.id;
 
     case "ticket:update_workflow":
-      // Workflow updates (status, priority, resolution) are reserved for Agents and Admins
-      return role === "ADMIN" || role === "AGENT";
+      // Workflow updates (status, priority, resolution) are reserved for Users and Admins
+      return role === "ADMIN" || role === "USER";
 
     case "ticket:assign":
       if (role === "ADMIN") return true;
-      if (role === "AGENT") {
+      if (role === "USER") {
         return !!resource && "assignedToId" in resource && (resource.assignedToId === user.id || resource.assignedToId === null);
       }
       return false;
@@ -69,7 +69,7 @@ export function can(user: SessionUser, action: Action, resource?: TicketResource
       return role === "ADMIN";
 
     case "comment:create":
-      if (role === "ADMIN" || role === "AGENT") return true;
+      if (role === "ADMIN" || role === "USER") return true;
       if (role === "CUSTOMER") {
         return !!resource && "createdById" in resource && resource.createdById === user.id;
       }

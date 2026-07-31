@@ -38,9 +38,8 @@ export const config = {
     
     // --- Protected API Routes ---
     "/api/tickets/:path*",
-    "/api/comments/:path*",
     "/api/meetings/:path*",
-    "/api/users/agents",
+    "/api/users/standard",
     "/api/users/change-password",
     "/api/users/invite" 
   ],

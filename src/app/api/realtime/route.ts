@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
             }
           } else {
             try {
-              if (session.user!.role === "ADMIN" || session.user!.role === "AGENT") {
+              if (session.user!.role === "ADMIN" || session.user!.role === "USER") {
                 // Ticket lookup bypassed: role guarantees view access
               } else {
                 const ticket = await prisma.ticket.findUnique({ 

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useCreateMeetingMutation } from "@/store/meetingsApi";
-import { useGetAgentsQuery } from "@/store/usersApi";
+import { useGetStandardUsersQuery } from "@/store/usersApi";
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
@@ -69,8 +69,8 @@ export function ScheduleMeetingModal({
   onSuccess,
 }: ScheduleMeetingModalProps) {
   const [createMeeting, { isLoading }] = useCreateMeetingMutation();
-  const { data: agentsData } = useGetAgentsQuery(undefined, { skip: !isOpen });
-  const agents = useMemo(() => agentsData || [], [agentsData]);
+  const { data: usersData } = useGetStandardUsersQuery(undefined, { skip: !isOpen });
+  const users = useMemo(() => usersData || [], [usersData]);
 
   const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState("");
@@ -94,18 +94,18 @@ export function ScheduleMeetingModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [conflictMsg, setConflictMsg] = useState("");
 
-  const selectedAgents = useMemo(() => {
-    return agents.filter(a => selectedTeammateIds.includes(a.id));
-  }, [agents, selectedTeammateIds]);
+  const selectedUsers = useMemo(() => {
+    return users.filter(a => selectedTeammateIds.includes(a.id));
+  }, [users, selectedTeammateIds]);
 
-  const filteredAgents = useMemo(() => {
+  const filteredUsers = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    return agents.filter(a =>
+    return users.filter(a =>
       !defaultAttendeeIds.includes(a.id) &&
       !selectedTeammateIds.includes(a.id) &&
       ((a.name || "").toLowerCase().includes(query) || (a.email || "").toLowerCase().includes(query))
     );
-  }, [agents, defaultAttendeeIds, selectedTeammateIds, searchQuery]);
+  }, [users, defaultAttendeeIds, selectedTeammateIds, searchQuery]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -283,21 +283,21 @@ export function ScheduleMeetingModal({
                   className="input-base w-full pr-10"
                   placeholder="Search teammates..."
                 />
-                {searchQuery && filteredAgents.length > 0 && (
+                {searchQuery && filteredUsers.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-lg shadow-xl border z-10" style={{ background: "var(--surface-0)", borderColor: "var(--border)" }}>
-                    {filteredAgents.map(agent => (
+                    {filteredUsers.map(user => (
                       <button
-                        key={agent.id}
+                        key={user.id}
                         type="button"
                         onClick={() => {
-                          setSelectedTeammateIds(prev => [...prev, agent.id]);
+                          setSelectedTeammateIds(prev => [...prev, user.id]);
                           setSearchQuery("");
                         }}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-black/5 transition-colors"
                         style={{ color: "var(--text-primary)" }}
                       >
                         <div className="font-medium">
-                          {agent.name || "Unknown Agent"} <span className="text-xs opacity-70 ml-1">({agent.email})</span>
+                          {user.name || "Unknown User"} <span className="text-xs opacity-70 ml-1">({user.email})</span>
                         </div>
                       </button>
                     ))}
@@ -305,14 +305,14 @@ export function ScheduleMeetingModal({
                 )}
               </div>
               
-              {selectedAgents.length > 0 && (
+              {selectedUsers.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {selectedAgents.map(agent => (
-                    <div key={agent.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border" style={{ background: "var(--surface-1)", borderColor: "var(--border)", color: "var(--text-primary)" }}>
-                      <span>{agent.name} ({agent.email})</span>
+                  {selectedUsers.map(user => (
+                    <div key={user.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border" style={{ background: "var(--surface-1)", borderColor: "var(--border)", color: "var(--text-primary)" }}>
+                      <span>{user.name} ({user.email})</span>
                       <button
                         type="button"
-                        onClick={() => setSelectedTeammateIds(prev => prev.filter(id => id !== agent.id))}
+                        onClick={() => setSelectedTeammateIds(prev => prev.filter(id => id !== user.id))}
                         className="hover:text-rose-500 transition-colors ml-1"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

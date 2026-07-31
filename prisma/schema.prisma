@@ -17,7 +17,6 @@ model User {
   image              String?
   deletedAt          DateTime?
   accounts           Account[]
-  comments           Comment[]
   meetingsCreated    Meeting[]         @relation("MeetingHost")
   meetingAttendances MeetingAttendee[]
   sessions           Session[]
@@ -102,7 +101,6 @@ model Ticket {
   execEscalatedAt  DateTime?
   threadId         String?
   messageId        String?
-  comments         Comment[]
   messages         TicketMessage[]
   meetings     Meeting[]
   assignedTo   User?                    @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: Restrict)
@@ -122,18 +120,6 @@ model Ticket {
   @@index([status, lastActivityAt])
 }
 
-model Comment {
-  id        String   @id @default(uuid())
-  content   String
-  ticketId  String
-  authorId  String
-  createdAt DateTime @default(now())
-  author    User     @relation(fields: [authorId], references: [id])
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-
-  @@index([ticketId])
-  @@index([authorId])
-}
 
 model Meeting {
   id                    String            @id @default(cuid())
@@ -163,7 +149,6 @@ model MeetingAttendee {
   meetingId  String
   userId     String?
   email      String?
-  rsvpStatus String   @default("PENDING")
   meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -175,7 +160,7 @@ model MeetingAttendee {
 
 enum Role {
   ADMIN
-  AGENT
+  USER
   CUSTOMER
 }
 

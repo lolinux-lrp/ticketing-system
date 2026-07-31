@@ -17,7 +17,7 @@ TicketFlow is a robust, autonomous helpdesk platform engineered for modern organ
 
 ## 🚀 Core Features Breakdown
 
-### 1. Autonomous Email Ingestion (`/api/cron/ingest-gmail`)
+### 1. Autonomous Email Ingestion (Webhooks)
 Our backend autonomously monitors a connected Gmail inbox for incoming support emails. When an email arrives, the ingestion engine:
 - **Smart Routing:** Evaluates the sender's email domain against our registered projects. If a domain strictly matches a project, the ticket is routed accordingly. Unmapped domains safely fall back to the "Other" project category to preserve strict database relational constraints without mutating the project table unexpectedly.
 - **Parses & Sanitizes:** Extracts the sender, subject, and text body, stripping out HTML and malformed characters.
@@ -131,13 +131,13 @@ pnpm dev
 ```
 
 **Terminal 2 (Local Cron Poller):**
-Executes `scripts/local-cron.ts`, which autonomously pings the `/api/cron/ingest-gmail` endpoint every 5 minutes and `/api/cron/check-sla` every 10 minutes using your local `CRON_SECRET`. *(Note: The `/api/cron/reminders` endpoint is not currently polled by this local script.)*
+Executes `scripts/local-cron.ts`, which autonomously pings the `/api/cron/check-sla` endpoint every 10 minutes, authenticating securely via the `Bearer CRON_SECRET` header. *(Note: The `/api/cron/reminders` endpoint is not currently polled by this local script.)*
 ```bash
 pnpm cron:dev
 ```
 
 ### Production Automation
-In a production environment (e.g., Vercel), the background automation is managed natively by `vercel.json` cron configurations. The Vercel infrastructure automatically triggers the `/api/cron/reminders` endpoint every minute, the ingestion endpoint every 5 minutes, and the SLA check every 10 minutes, authenticating securely via the `Bearer CRON_SECRET` header.
+In a production environment (e.g., Vercel), the background automation is managed natively by `vercel.json` cron configurations. The Vercel infrastructure automatically triggers the `/api/cron/reminders` endpoint every minute, and the SLA check every 10 minutes, authenticating securely via the `Bearer CRON_SECRET` header.
 *Note: High-frequency schedules (like once-per-minute reminders) require a Vercel Pro/Enterprise plan. For Hobby deployments, consider using an external scheduler like GitHub Actions or Mergent.*
 
 ---

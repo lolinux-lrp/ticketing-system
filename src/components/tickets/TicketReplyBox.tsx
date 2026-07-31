@@ -14,7 +14,7 @@ export function TicketReplyBox({ ticket, ticketId }: TicketReplyBoxProps) {
   const { data: session } = useSession();
   const [createMessage, { isLoading }] = useCreateTicketMessageMutation();
 
-  const isAgent = session?.user?.role === "AGENT" || session?.user?.role === "ADMIN";
+  const isUser = session?.user?.role === "USER" || session?.user?.role === "ADMIN";
 
   const [content, setContent] = useState("");
   const [to, setTo] = useState("");
@@ -24,7 +24,7 @@ export function TicketReplyBox({ ticket, ticketId }: TicketReplyBoxProps) {
   const [showRecipients, setShowRecipients] = useState(false);
 
   useEffect(() => {
-    if (isAgent && !to) {
+    if (isUser && !to) {
       const clientMessages = ticket.messages?.filter((m) => m.senderType === "CLIENT") || [];
       const lastClientMessage = clientMessages[clientMessages.length - 1];
       // eslint-disable-next-line
@@ -35,7 +35,7 @@ export function TicketReplyBox({ ticket, ticketId }: TicketReplyBoxProps) {
       }
       setShowRecipients(true);
     }
-  }, [isAgent, ticket, to]);
+  }, [isUser, ticket, to]);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,7 +124,7 @@ export function TicketReplyBox({ ticket, ticketId }: TicketReplyBoxProps) {
         )}
         
         <div className="relative">
-          {!showRecipients && isAgent && (
+          {!showRecipients && isUser && (
             <button
               type="button"
               onClick={() => setShowRecipients(true)}
@@ -153,7 +153,7 @@ export function TicketReplyBox({ ticket, ticketId }: TicketReplyBoxProps) {
           style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}
         >
           <div className="flex items-center gap-2">
-            {isAgent && (
+            {isUser && (
               <select
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value as Status | "")}
